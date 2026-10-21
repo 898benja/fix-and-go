@@ -16,7 +16,7 @@ from rest_framework.response import Response
 from accounts.permissions import IsClient, IsProvider
 from core.pagination import paginate_queryset
 from .models import Quote, Rating, ServiceRequest
-from .workflow import cancel_request, create_quote, decide_quote
+from .workflow import cancel_request, create_quote, decide_quote, advance_request, create_rating
 from .serializers import (
     QuoteCreateSerializer,
     QuoteReadSerializer,
@@ -131,6 +131,10 @@ def request_list_create(request):
     else:
         qs = ServiceRequest.objects.none()
 
+    from .filters import RequestFilters
+    filters = RequestFilters(data=request.query_params)
+    filters.is_valid(raise_exception=True)
+
     # Filtros opcionales (BE-12)
     status_filter = request.query_params.get('status')
     if status_filter:
@@ -160,7 +164,9 @@ def request_list_create(request):
     qs = qs.prefetch_related('quotes')
 
     # Orden estable por defecto: más recientes primero (BE-12)
-    qs = qs.order_by('-created_at')
+    if filters.validated_data.get('provider'):
+        qs = qs.filter(provider_id=filters.validated_data['provider'])
+    qs = qs.order_by('-created_at', '-pk')
 
     return paginate_queryset(request, qs, ServiceRequestListSerializer)
 
@@ -344,8 +350,7 @@ def request_start(request, pk):
             f'No se puede iniciar un servicio en estado {sr.get_status_display()}.'
         )
 
-    sr.status = ServiceRequest.Status.IN_PROGRESS
-    sr.save(update_fields=['status', 'updated_at'])
+    sr = advance_request(sr, ServiceRequest.Status.ACCEPTED, ServiceRequest.Status.IN_PROGRESS)
 
     logger.info(
         'Servicio de solicitud #%d iniciado por prestador #%d',
@@ -377,8 +382,7 @@ def request_complete(request, pk):
             f'No se puede completar un servicio en estado {sr.get_status_display()}.'
         )
 
-    sr.status = ServiceRequest.Status.COMPLETED
-    sr.save(update_fields=['status', 'updated_at'])
+    sr = advance_request(sr, ServiceRequest.Status.IN_PROGRESS, ServiceRequest.Status.COMPLETED)
 
     logger.info(
         'Servicio de solicitud #%d completado (marcado por usuario #%d)',
@@ -425,7 +429,7 @@ def request_rating(request, pk):
 
     serializer = RatingCreateSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
-    rating = serializer.save(service_request=sr)
+    rating = create_rating(sr, serializer)
 
     logger.info(
         'Valoración de solicitud #%d creada por cliente #%d — %d★',

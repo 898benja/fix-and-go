@@ -61,7 +61,7 @@ def provider_list(request):
     BE-12: orden estable por defecto (display_name), paginación aplicada.
     """
     qs = ProviderProfile.objects.filter(
-        is_active=True,
+        is_active=True, user__is_active=True,
     ).select_related('user').prefetch_related('categories', 'communes')
 
     # Filtro por categoría (slug)
@@ -91,7 +91,7 @@ def provider_list(request):
     }
     if ordering not in allowed_orderings:
         ordering = 'display_name'
-    qs = qs.order_by(ordering)
+    qs = qs.order_by(ordering, 'pk')
 
     qs = qs.distinct()
 
@@ -119,7 +119,7 @@ def provider_detail(request, pk):
     try:
         profile = ProviderProfile.objects.select_related('user').prefetch_related(
             'categories', 'communes',
-        ).get(pk=pk, is_active=True)
+        ).get(pk=pk, is_active=True, user__is_active=True)
     except ProviderProfile.DoesNotExist:
         return Response(
             {'code': 'not_found', 'detail': 'Prestador no encontrado.'},

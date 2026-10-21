@@ -143,7 +143,7 @@ class ServiceRequestListSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
     def get_client_name(self, obj):
-        return obj.client.get_full_name() or obj.client.email
+        return obj.client.get_full_name() or 'Cliente'
 
     def get_provider_name(self, obj):
         profile = getattr(obj.provider, 'provider_profile', None)
@@ -251,4 +251,4 @@ class RatingReadSerializer(serializers.ModelSerializer):
 
     def get_client_name(self, obj):
         return (obj.service_request.client.get_full_name()
-                or obj.service_request.client.email)
+                or 'Cliente')

@@ -11,7 +11,8 @@ El frontend puede presentar errores sin analizar formatos distintos por endpoint
 
 import logging
 
-from rest_framework.views import exception_handler
+from rest_framework.views import exception_handler, set_rollback
+from rest_framework.response import Response
 from rest_framework import status
 
 logger = logging.getLogger(__name__)
@@ -42,14 +43,11 @@ def custom_exception_handler(exc, context):
     response = exception_handler(exc, context)
 
     if response is None:
-        # Error no manejado por DRF — se deja para Django (500)
-        logger.error(
-            'Error no manejado en %s: %s',
-            context.get('view', 'unknown'),
-            str(exc),
-            exc_info=True,
-        )
-        return None
+        # No devolver HTML de DEBUG, trazas ni valores privados de excepciones.
+        # Las transacciones de negocio ya se deshicieron al salir del servicio.
+        set_rollback()
+        logger.error('Error no manejado en API: %s', type(exc).__name__)
+        return Response({'code': 'server_error', 'detail': 'No se pudo completar la operación. Intenta nuevamente.'}, status=500)
 
     # Obtener código de error semántico
     error_code = STATUS_CODE_MAP.get(response.status_code, 'error')

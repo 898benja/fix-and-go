@@ -1,77 +1,103 @@
-# FIX&GO
+# FIX&GO · MVP móvil
 
-Base técnica del MVP móvil: React Native + Expo + TypeScript y una API monolítica modular Django REST Framework con SQLite local.
+App académica de servicios para el hogar en Santiago. Cliente React Native + Expo + TypeScript; API monolítica modular Django REST Framework; SQLite local en el Mac. **Los pagos implementados son exclusivamente de demostración.**
 
-## Implementado
+## Recorrido implementado
 
-- Pantalla móvil de diagnóstico de conexión, con tiempo límite y reintento.
-- `GET /api/v1/health/`: comprueba la conexión SQL; devuelve 503 si falla.
-- Modelo de usuario extensible y panel Django Admin.
-- Migraciones y pruebas de backend; dependencias versionadas.
+Registro e inicio de sesión → perfil reutilizable → búsqueda de prestador → solicitud → cotización → aceptación → inicio del servicio → materiales propuestos y aprobados/rechazados → término del servicio → un cobro final demo → comprobante demo y conversación interna. El cliente también puede valorar el trabajo completado.
 
-Todavía no se implementaron registro móvil, roles de contratación, solicitudes, cotizaciones ni trabajos. Sus reglas están pendientes en `docs/decisiones-iniciales.md`.
+- Roles separados: cliente y prestador; permisos por propietario en cada solicitud.
+- Datos personales editables: nombre, apellido, teléfono, dirección y comuna habitual. La app reutiliza dirección y comuna al pedir otro servicio; puede modificarlas antes de enviar.
+- Solicitudes y cotizaciones con validaciones, historial básico y transiciones controladas.
+- El backend calcula el total; materiales pendientes bloquean el checkout y materiales rechazados quedan excluidos.
+- Una sola orden por solicitud, snapshot de importes, rechazo y reintento sin duplicar órdenes.
+- Teléfonos ocultos en el catálogo; conversación posterior al pago demo, con actualización manual.
+- Tokens con expiración de 24 horas. SecureStore en dispositivos; memoria en la vista web.
+- Administración de solicitudes, cotizaciones, materiales y liquidaciones en modo consulta para evitar saltarse el flujo.
 
-## Backend (Python 3.13)
+**Fuera del cierre actual:** pasarela bancaria real, tokenización/guardado de tarjetas, boletas tributarias, llamadas, notificaciones push, verificación profesional y distribución en tiendas. No hay cuenta de comercio ni proveedor de pagos elegido. La app no solicita PAN ni CVV.
+
+## Ejecutar en el Mac
+
+Requisitos: Python 3.13, Node 24, dependencias de `backend/requirements.txt` y `mobile/package-lock.json`.
+
+### 1. API
 
 ```sh
 cd backend
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env
+# Solo en una instalación nueva; no sobrescribas tu configuración existente.
+cp -n .env.example .env
 python -c "import secrets; print(secrets.token_urlsafe(48))"
 ```
 
-Copia el secreto generado a `DJANGO_SECRET_KEY` en `.env`. Añade la IP LAN del Mac a `DJANGO_ALLOWED_HOSTS`, separada por coma. Usa `ipconfig getifaddr en0` si Wi-Fi está en esa interfaz.
+Copia el secreto generado a `DJANGO_SECRET_KEY` en `backend/.env`. Configura `DJANGO_DEBUG=true` para el entorno local y añade la IP LAN del Mac a `DJANGO_ALLOWED_HOSTS`. No publiques `.env` ni bases de datos.
 
 ```sh
 python manage.py migrate
-python manage.py createsuperuser
-python manage.py runserver 0.0.0.0:8000
+# Opción explícita de prueba: no activa una pasarela ni cobra dinero.
+PAYMENTS_DEMO_ENABLED=true python manage.py runserver 0.0.0.0:8000
 ```
 
-Administración local: http://127.0.0.1:8000/admin/ . Crea tu propia contraseña; no hay credenciales compartidas. El servidor de desarrollo es para una red de pruebas confiable, no para publicarlo en Internet.
+La simulación exige simultáneamente `DJANGO_DEBUG=true` y `PAYMENTS_DEMO_ENABLED=true`. Sin esas dos condiciones responde 403. Estado de API y base: `http://127.0.0.1:8000/api/v1/health/`.
 
-## App móvil (Node 24)
+Usa cuentas nuevas desde la app. Para datos ficticios precargados en una base de desarrollo puedes ejecutar `python manage.py seed_demo_data`. Ese comando contiene credenciales públicas de demo: no usarlo en producción ni con información real. No cambia las contraseñas de usuarios ya existentes. `--reset` se rechaza si hay materiales, pagos o mensajes que deban conservarse.
+
+### 2. App React Native
+
+En otra terminal:
 
 ```sh
 cd mobile
 npm ci
-cp .env.example .env
+cp -n .env.example .env
 ```
 
-Configura `EXPO_PUBLIC_API_URL=http://IP_DEL_MAC:8000`. Esta variable es pública; nunca coloques secretos en variables `EXPO_PUBLIC_`.
+Configura `EXPO_PUBLIC_API_URL=http://IP_DEL_MAC:8000` en `mobile/.env`. En teléfono, `localhost` apunta al teléfono; ambos equipos deben poder comunicarse por Wi-Fi. La variable Expo es pública y no debe contener secretos.
 
 ```sh
 npm start -- --lan
 ```
 
-Abre el QR con Expo Go compatible con el SDK declarado en `mobile/package.json`. Mac y teléfonos deben estar en una red que permita comunicación entre equipos. En un teléfono `localhost` apunta al propio teléfono. Reinicia Expo después de cambiar `.env`.
+Abre el QR en Expo Go compatible con SDK 57. Para revisar la misma app en el navegador:
 
-Pulsa **Probar conexión**. El resultado debe confirmar API y SQLite. Si la red del instituto aísla dispositivos, prueba una red alternativa y vuelve a configurar la IP. La comprobación en teléfonos físicos sigue pendiente.
+```sh
+EXPO_PUBLIC_API_URL=http://127.0.0.1:8000 npm run web
+```
 
-## Validación
+Reinicia Expo al cambiar la URL. La comprobación de conexión está en la pantalla de ingreso. Si la red del instituto aísla dispositivos, usa una red de pruebas que permita comunicación entre ellos.
+
+## Validar cambios
 
 ```sh
 cd backend
 .venv/bin/python manage.py check
-.venv/bin/python manage.py test
+.venv/bin/python manage.py makemigrations --check --dry-run
+.venv/bin/python manage.py test --noinput
 cd ../mobile
 npm run typecheck
+npm test
 npx expo install --check
-npx expo export --platform ios --platform android
+npx expo export --platform all
 ```
 
-## Organización
+GitHub Actions verifica Django, migraciones, pruebas Python, TypeScript, pruebas del cliente HTTP y compatibilidad de dependencias Expo. Generar bundles no equivale a instalar ni probar la app en un teléfono físico.
 
-- `mobile/`: app y cliente HTTP.
-- `backend/accounts/`: identidad extensible; roles pendientes.
-- `backend/core/`: diagnóstico técnico.
-- `infra/`: reservado para configuración reproducible; Docker pendiente.
-- `docs/`: decisiones técnicas.
+## Documentación y carpetas
 
-La base de datos, archivos `.env`, dependencias y claves permanecen fuera de Git. Solo usar datos ficticios para las pruebas académicas.
+- [Funcionamiento del backend, API y conexión móvil](docs/backend-mvp-pagos.md).
+- [Resultados QA y pruebas pendientes](docs/qa-mvp-2026-10-20.md).
+- `backend/accounts/`: identidad y perfiles privados/profesionales.
+- `backend/catalog/`: categorías, comunas, búsqueda y catálogo de prestadores.
+- `backend/services/`: solicitudes, cotizaciones, estados y valoraciones.
+- `backend/billing/`: materiales, liquidación, pago demo, comprobante y mensajes.
+- `backend/core/`: health, errores y datos de demostración.
+- `mobile/`: cliente principal, también ejecutable en web.
+- `frontend/`: prototipo HTML previo, conservado como referencia; no es el cliente React Native ni implementa el nuevo flujo completo.
+- `trello_fix_go_mvp_backlog.md`: backlog histórico; el estado implementado actual está en esta documentación.
 
-## Compatibilidad de compilación nativa
+## Compatibilidad
 
-La plantilla usa Expo SDK 57. Expo Go en dispositivo físico debe ser compatible con ese SDK y con el sistema del teléfono. Generar bundles JavaScript no equivale a compilar una app nativa. Para compilar iOS localmente SDK 57 requiere Xcode 26.4 o superior; este Mac tiene Xcode 16.2, por lo que esa compilación queda pendiente. Referencia: https://docs.expo.dev/versions/v57.0.0/ .
+Expo SDK 57 usa React Native 0.86 y React 19.2.3. Para compilar iOS localmente requiere Xcode 26.4 o superior; el Mac revisado tenía Xcode 16.2. Los bundles iOS/Android se generan, pero no se afirma que exista una compilación nativa instalada. Ver [requisitos oficiales de Expo SDK 57](https://docs.expo.dev/versions/v57.0.0/).

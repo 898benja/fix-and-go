@@ -21,6 +21,11 @@ class CommuneSerializer(serializers.ModelSerializer):
 class ProviderListSerializer(serializers.ModelSerializer):
     """Prestador en listado de búsqueda (sin datos privados)."""
 
+    phone = serializers.SerializerMethodField()
+
+    def get_phone(self, obj):
+        return ''
+
     user_id = serializers.IntegerField(source='user.id', read_only=True)
     categories = CategorySerializer(many=True, read_only=True)
     communes = CommuneSerializer(many=True, read_only=True)

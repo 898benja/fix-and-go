@@ -8,8 +8,19 @@ from django.contrib import admin
 from .models import Quote, Rating, ServiceRequest
 
 
+class BusinessReadOnlyAdmin(admin.ModelAdmin):
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def get_readonly_fields(self, request, obj=None):
+        return [field.name for field in self.model._meta.fields]
+
+
 @admin.register(ServiceRequest)
-class ServiceRequestAdmin(admin.ModelAdmin):
+class ServiceRequestAdmin(BusinessReadOnlyAdmin):
     """Administración de solicitudes de servicio.
 
     BE-13: búsqueda por cliente/prestador, filtros por estado/categoría/comuna,
@@ -36,7 +47,7 @@ class ServiceRequestAdmin(admin.ModelAdmin):
 
 
 @admin.register(Quote)
-class QuoteAdmin(admin.ModelAdmin):
+class QuoteAdmin(BusinessReadOnlyAdmin):
     """Administración de cotizaciones.
 
     BE-13: vista con precio formateado, filtros por estado.
@@ -61,7 +72,7 @@ class QuoteAdmin(admin.ModelAdmin):
 
 
 @admin.register(Rating)
-class RatingAdmin(admin.ModelAdmin):
+class RatingAdmin(BusinessReadOnlyAdmin):
     """Administración de valoraciones (P2 — BE-18)."""
 
     list_display = ['id', 'service_request', 'score', 'created_at']

@@ -5,7 +5,7 @@ operación de cada transacción es un UPDATE condicionado al estado esperado.
 Si otra petición ya lo cambió, se responde 409 sin sobrescribir su decisión.
 """
 
-from django.db import transaction
+from django.db import transaction, IntegrityError
 from django.utils import timezone
 from rest_framework.exceptions import APIException
 
@@ -69,3 +69,19 @@ def cancel_request(sr):
     )
     # Refrescar evita serializar el objeto prefetched anterior a la transacción.
     return ServiceRequest.objects.get(pk=sr.pk)
+
+
+@transaction.atomic
+def advance_request(sr, expected, target):
+    """Compare-and-set también para inicio y cierre; evita guardar estados viejos."""
+    _change(sr.pk, [expected], target)
+    return ServiceRequest.objects.get(pk=sr.pk)
+
+
+def create_rating(sr, serializer):
+    """La restricción única es la autoridad incluso si dos clientes envían a la vez."""
+    try:
+        with transaction.atomic():
+            return serializer.save(service_request=sr)
+    except IntegrityError:
+        raise StateConflict('Ya existe una valoración para esta solicitud.')

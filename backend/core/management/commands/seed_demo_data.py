@@ -8,12 +8,14 @@ El comando es idempotente: puede ejecutarse varias veces sin duplicar registros.
 Usa get_or_create para todas las entidades.
 """
 
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
 from accounts.models import User, ProviderProfile
 from catalog.models import Category, Commune
 from services.models import ServiceRequest, Quote, Rating
+from billing.models import MaterialExtra, PaymentOrder, ServiceMessage
+from django.db.models import Q
 
 
 # ---------------------------------------------------------------------------
@@ -177,8 +179,9 @@ class Command(BaseCommand):
                 'is_superuser': True,
             },
         )
-        admin.set_password(DEMO_PASSWORD)
-        admin.save()
+        if created:
+            admin.set_password(DEMO_PASSWORD)
+            admin.save()
         if created:
             self.stdout.write(self.style.SUCCESS('  + Superuser admin creado'))
         return admin
@@ -193,8 +196,9 @@ class Command(BaseCommand):
                 'role': User.Role.CLIENT,
             },
         )
-        user.set_password(DEMO_PASSWORD)
-        user.save()
+        if created:
+            user.set_password(DEMO_PASSWORD)
+            user.save()
         if created:
             self.stdout.write(self.style.SUCCESS(f'  + Cliente: {first_name} {last_name}'))
         return user
@@ -211,8 +215,9 @@ class Command(BaseCommand):
                 'role': User.Role.PROVIDER,
             },
         )
-        user.set_password(DEMO_PASSWORD)
-        user.save()
+        if created:
+            user.set_password(DEMO_PASSWORD)
+            user.save()
 
         profile, _ = ProviderProfile.objects.get_or_create(
             user=user,
@@ -387,5 +392,8 @@ class Command(BaseCommand):
         se eliminan en cascada. Los usuarios ajenos a la demo se conservan.
         """
         self.stdout.write(self.style.WARNING('Eliminando datos de demostración...'))
+        related = ServiceRequest.objects.filter(Q(client__username__in=DEMO_USERNAMES) | Q(provider__username__in=DEMO_USERNAMES))
+        if any(model.objects.filter(service_request__in=related).exists() for model in (MaterialExtra, PaymentOrder, ServiceMessage)):
+            raise CommandError('Hay materiales, liquidaciones o mensajes asociados a la demo. Usa una base de pruebas nueva para conservar ese historial.')
         User.objects.filter(username__in=DEMO_USERNAMES).delete()
         self.stdout.write('  Datos eliminados.')

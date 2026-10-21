@@ -34,8 +34,10 @@ class IdentityTests(APITestCase):
 
     def test_registration_rolls_back_when_token_creation_fails(self):
         with patch('accounts.serializers.Token.objects.create', side_effect=RuntimeError('test')):
-            with self.assertRaises(RuntimeError):
-                self.register()
+            response = self.register()
+            self.assertEqual(response.status_code, 500)
+            self.assertEqual(response.data['code'], 'server_error')
+            self.assertNotIn('RuntimeError', str(response.data))
         self.assertFalse(User.objects.exists())
 
     def test_case_insensitive_duplicate_is_rejected(self):
@@ -127,3 +129,17 @@ class IdentityTests(APITestCase):
         self.assertEqual(response.data['display_name'], 'Prestador actualizado')
         self.assertEqual(response.data['categories'][0]['id'], category.pk)
         self.assertEqual(response.data['communes'][0]['id'], commune.pk)
+
+    def test_registration_saves_reusable_personal_data(self):
+        data = self.payload()
+        data.update(phone='+56900000000', default_address='Dirección ficticia', default_commune=Commune.objects.first().pk)
+        response = self.register(data)
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(response.data['user']['default_address'], data['default_address'])
+        self.assertEqual(User.objects.get().default_commune_id, data['default_commune'])
+
+    def test_registration_rejects_invalid_phone_and_too_long_email(self):
+        data = self.payload(); data['phone'] = '--------'
+        self.assertEqual(self.register(data).status_code, 400)
+        data = self.payload(); data['email'] = 'x' * 140 + '@example.test'
+        self.assertEqual(self.register(data).status_code, 400)

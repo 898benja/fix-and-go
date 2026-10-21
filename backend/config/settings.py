@@ -36,7 +36,7 @@ INSTALLED_APPS = [
     'django.contrib.admin', 'django.contrib.auth', 'django.contrib.contenttypes',
     'django.contrib.sessions', 'django.contrib.messages', 'django.contrib.staticfiles',
     'rest_framework', 'rest_framework.authtoken',
-    'accounts', 'core', 'catalog', 'services', 'corsheaders',
+    'accounts', 'core', 'catalog', 'services', 'billing', 'corsheaders',
 ]
 
 MIDDLEWARE = [
@@ -202,3 +202,8 @@ LOGGING = {
         },
     },
 }
+
+# No habilita cobros reales. Requiere opt-in explícito y DEBUG para la demostración.
+PAYMENTS_DEMO_ENABLED = os.environ.get('PAYMENTS_DEMO_ENABLED', 'false').lower() == 'true'
+# Tasa ilustrativa, no determina el tratamiento tributario del comercio.
+DEMO_VAT_PERCENT = int(os.environ.get('DEMO_VAT_PERCENT', '19'))

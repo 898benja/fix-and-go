@@ -13,6 +13,14 @@ class User(AbstractUser):
       (la creación automática se maneja en el serializer de registro).
     """
 
+    # Datos privados reutilizables: nunca se incluyen en el catálogo público.
+    phone = models.CharField(max_length=20, blank=True)
+    default_address = models.CharField(max_length=300, blank=True)
+    default_commune = models.ForeignKey(
+        'catalog.Commune', null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='resident_users',
+    )
+
     class Role(models.TextChoices):
         CLIENT = 'CLIENT', 'Cliente'
         PROVIDER = 'PROVIDER', 'Prestador'

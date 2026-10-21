@@ -11,6 +11,8 @@ from rest_framework import serializers
 from rest_framework.authtoken.models import Token
 
 from .models import ProviderProfile, User
+from .profile import PersonalProfileSerializer
+from catalog.models import Commune
 
 
 # ---------------------------------------------------------------------------
@@ -26,11 +28,19 @@ class RegisterSerializer(serializers.Serializer):
     - display_name obligatorio si el rol es PROVIDER.
     """
 
-    email = serializers.EmailField()
+    email = serializers.EmailField(max_length=150)
     password = serializers.CharField(write_only=True, min_length=8)
     first_name = serializers.CharField(max_length=150)
     last_name = serializers.CharField(max_length=150)
     role = serializers.ChoiceField(choices=User.Role.choices)
+    # Datos reutilizables opcionales para mantener compatibilidad con cuentas existentes.
+    phone = serializers.CharField(max_length=20, required=False, allow_blank=True)
+    default_address = serializers.CharField(max_length=300, required=False, allow_blank=True)
+    default_commune = serializers.PrimaryKeyRelatedField(queryset=Commune.objects.all(), required=False, allow_null=True)
+
+    def validate_phone(self, value):
+        return PersonalProfileSerializer().validate_phone(value)
+
     # Solo para prestadores
     display_name = serializers.CharField(max_length=120, required=False)
 
@@ -75,6 +85,9 @@ class RegisterSerializer(serializers.Serializer):
             first_name=validated_data['first_name'],
             last_name=validated_data['last_name'],
             role=role,
+            phone=validated_data.get('phone', ''),
+            default_address=validated_data.get('default_address', ''),
+            default_commune=validated_data.get('default_commune'),
         )
         user.set_password(password)
         user.save()
@@ -93,7 +106,7 @@ class LoginSerializer(serializers.Serializer):
     BE-02: cubrir login correcto, incorrecto y cuenta inactiva.
     """
 
-    email = serializers.EmailField()
+    email = serializers.EmailField(max_length=150)
     password = serializers.CharField(write_only=True)
 
     def validate(self, attrs):
@@ -121,7 +134,7 @@ class UserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ['id', 'email', 'first_name', 'last_name', 'role', 'role_display']
+        fields = ['id', 'email', 'first_name', 'last_name', 'role', 'role_display', 'phone', 'default_address', 'default_commune']
         read_only_fields = fields
 
 

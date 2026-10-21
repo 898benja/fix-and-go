@@ -226,6 +226,9 @@ class Rating(models.Model):
     class Meta:
         verbose_name = 'valoración'
         verbose_name_plural = 'valoraciones'
+        constraints = [models.CheckConstraint(
+            condition=models.Q(score__gte=1, score__lte=5), name='rating_score_1_to_5',
+        )]
 
     def clean(self):
         """Valida puntaje y que la solicitud esté completada."""

@@ -36,6 +36,9 @@ class UserAdmin(BaseUserAdmin):
     # BE-13: bloquear edición de rol desde admin (solo visible)
     readonly_fields = ['date_joined', 'last_login']
 
+    def get_readonly_fields(self, request, obj=None):
+        return self.readonly_fields + (['role'] if obj else [])
+
 
 @admin.register(ProviderProfile)
 class ProviderProfileAdmin(admin.ModelAdmin):
