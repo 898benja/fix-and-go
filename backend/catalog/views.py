@@ -98,6 +98,7 @@ def provider_list(request):
 
     # Anotar promedio de valoración y cantidad de servicios completados
     qs = qs.annotate(
+        rating_count=Count('user__provider_requests__rating', distinct=True),
         avg_rating=Avg(
             'user__provider_requests__rating__score',
         ),
@@ -124,7 +125,7 @@ def provider_detail(request, pk):
     try:
         profile = ProviderProfile.objects.select_related('user').prefetch_related(
             'categories', 'communes',
-        ).get(pk=pk, is_active=True, user__is_active=True)
+        ).annotate(avg_rating=Avg('user__provider_requests__rating__score'),rating_count=Count('user__provider_requests__rating',distinct=True)).get(pk=pk, is_active=True, user__is_active=True)
     except ProviderProfile.DoesNotExist:
         return Response(
             {'code': 'not_found', 'detail': 'Prestador no encontrado.'},

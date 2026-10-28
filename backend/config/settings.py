@@ -74,7 +74,7 @@ WSGI_APPLICATION = 'config.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'NAME': os.environ.get('SQLITE_PATH', BASE_DIR / 'db.sqlite3'),
     }
 }
 
@@ -210,5 +210,5 @@ DEMO_VAT_PERCENT = int(os.environ.get('DEMO_VAT_PERCENT', '19'))
 
 # Sustituible sin recompilar la app. Respetar atribución y caché del proveedor.
 MAP_TILE_URL = os.environ.get('MAP_TILE_URL', 'https://tile.openstreetmap.org/{z}/{x}/{y}.png')
-MEDIA_ROOT = BASE_DIR / 'media'
+MEDIA_ROOT = os.environ.get('MEDIA_ROOT', BASE_DIR / 'media')
 DATA_UPLOAD_MAX_MEMORY_SIZE = 3 * 1024 * 1024

@@ -2,6 +2,12 @@
 
 App académica de servicios para el hogar en Santiago. Cliente React Native + Expo + TypeScript; API monolítica modular Django REST Framework; SQLite local en el Mac. **Los pagos implementados son exclusivamente de demostración.**
 
+## Documentación del equipo
+
+El [índice de entregables](docs/ENTREGABLES.md) reúne Product Vision, Product Backlog, Sprint Backlog, retrospectivas, requisitos no funcionales, pruebas, Docker y manual técnico. Incluye responsables propuestos y distingue implementación de aceptación pendiente.
+
+Para Docker: consultar [manual técnico](docs/MANUAL_TECNICO.md), puertos locales 18000/18090 y volumen aislado.
+
 ## Recorrido implementado
 
 Registro e inicio de sesión → perfil reutilizable → mapa de prestadores → solicitud → cotización aceptada → materiales aprobados/rechazados → pago único demo con tarjeta ficticia guardada → chat e inicio del trabajo → fotos del resultado → confirmación del cliente → valoración. Un reclamo abre una revisión administrativa; aprobarlo genera reembolso demo y alerta al prestador. Tres alertas confirmadas deshabilitan su cuenta, conservando el historial.

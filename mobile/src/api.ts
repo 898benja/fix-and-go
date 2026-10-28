@@ -13,6 +13,9 @@ export type User = {
 export type Session = { token: string; user: User };
 export type Option = { id: number; name: string; slug: string };
 export type Provider = {
+  avatar?: string;
+  avg_rating?: number | null;
+  rating_count?: number;
   latitude: number | null;
   longitude: number | null;
   map_visible: boolean;

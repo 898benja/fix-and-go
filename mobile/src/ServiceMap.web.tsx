@@ -14,11 +14,11 @@ export default function ServiceMap(props: MapProps) {
       if (e.source === frame.current?.contentWindow && e.origin === origin) handleMapMessage(e.data, props);
     };
     window.addEventListener('message', receive);
-    if (loaded) frame.current?.contentWindow?.postMessage({type:'fixgo-update',point:props.point,markers:props.markers,readOnly:props.readOnly,actionLabel:props.actionLabel},origin);
+    if (loaded) frame.current?.contentWindow?.postMessage({type:'fixgo-update',point:props.point,markers:props.markers,readOnly:props.readOnly,actionLabel:props.actionLabel,immersive:props.immersive,selectedId:props.selectedId},origin);
     return () => window.removeEventListener('message', receive);
-  }, [props.point, props.markers, props.onPoint, props.onSelect, props.readOnly, props.actionLabel, loaded]);
+  }, [props.point, props.markers, props.onPoint, props.onSelect, props.readOnly, props.actionLabel, props.immersive, props.selectedId, loaded]);
   if (!apiUrl) return <Text>Configura la conexión para mostrar el mapa.</Text>;
-  return <View style={{height:380,borderRadius:18,overflow:'hidden'}}>{createElement('iframe', {
+  return <View style={{height:props.height??380,borderRadius:props.immersive?0:18,overflow:'hidden'}}>{createElement('iframe', {
     ref:frame,src:url,title:'Mapa de prestadores FIX&GO',onLoad:()=>setLoaded(true),
     style:{width:'100%',height:'100%',border:0},referrerPolicy:'strict-origin-when-cross-origin',
   })}</View>;

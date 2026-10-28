@@ -1,84 +1,92 @@
-import { useEffect, useRef, useState } from 'react';
-import { Text, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, Image, Linking, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
 import { api, options, Option, Page, Provider, Session } from './api';
-import { Button, Card, Chips, Field, s } from './ui';
+import { Button, colors, s } from './ui';
 import ServiceMap from './ServiceMap';
-import { Point, validPoint } from './map-contract';
+import { Point } from './map-contract';
 import type { Run } from './screens';
 
-export function Explore({session,run,busy,onChoose}:{session:Session;run:Run;busy:boolean;onChoose:(p:Provider)=>void}) {
+export function ProviderPortrait({provider,size=52}:{provider:Provider;size?:number}) {
+  return provider.avatar?<Image accessibilityLabel={`Foto de ${provider.display_name}`} source={{uri:provider.avatar}} style={{width:size,height:size,borderRadius:size/2}}/>:
+    <View style={{width:size,height:size,borderRadius:size/2,backgroundColor:'#FFF0C3',alignItems:'center',justifyContent:'center'}}><Text style={{fontSize:size*0.4,fontWeight:'800',color:colors.ink}}>{provider.display_name.charAt(0)}</Text></View>;
+}
+export function ProviderRating({provider}:{provider:Provider}) {
+  const count=provider.rating_count??0;
+  const rating=provider.avg_rating;
+  if(!count||rating==null)return <Text style={{fontSize:14,color:colors.muted}}>Sin reseñas todavía</Text>;
+  return <Text accessibilityLabel={`${rating.toFixed(1)} de 5, ${count} reseñas`} style={{fontSize:16,color:'#8A5900',fontWeight:'700'}}>{'★'.repeat(Math.round(rating))}{'☆'.repeat(5-Math.round(rating))} <Text style={{color:colors.ink}}>{rating.toFixed(1)} <Text style={{fontWeight:'400',fontSize:13}}>({count} reseñas)</Text></Text></Text>;
+}
+
+export function Explore({session,busy,onChoose}:{session:Session;run:Run;busy:boolean;onChoose:(p:Provider)=>void}) {
+  const {height,width}=useWindowDimensions();
+  const canvasHeight=Math.max(560,height-155);
   const [point,setPoint]=useState<Point|null>(null);
-  const [latitude,setLatitude]=useState('');
-  const [longitude,setLongitude]=useState('');
-  const [radius,setRadius]=useState(10);
   const [categories,setCategories]=useState<Option[]>([]);
   const [category,setCategory]=useState(0);
-  const [search,setSearch]=useState('');
+  const [radius,setRadius]=useState(10);
   const [page,setPage]=useState<Page<Provider>|null>(null);
   const [number,setNumber]=useState(1);
   const [selected,setSelected]=useState<number|null>(null);
-  const [searched,setSearched]=useState(false);
-  const [advanced,setAdvanced]=useState(false);
-  // Cambiar parámetros invalida resultados anteriores para no mostrar cercanía obsoleta.
-  const revision=useRef(0);
-  const invalidate=()=>{revision.current++;setPage(null);setSelected(null);setSearched(false);};
-  const choosePoint=(p:Point)=>{invalidate();setPoint(p);setLatitude(String(p.latitude));setLongitude(String(p.longitude));};
-  const load=(n=1)=>run(async()=>{
-    const version=revision.current;
-    const q=new URLSearchParams({page:String(n),search:search.trim()});
-    if(category)q.set('category',categories.find(c=>c.id===category)!.slug);
-    if(point){q.set('latitude',String(point.latitude));q.set('longitude',String(point.longitude));q.set('radius_km',String(radius));}
-    const data=await api<Page<Provider>>(`providers/?${q}`,session.token);
-    if(version!==revision.current)return;
-    setPage(data);setNumber(n);setSearched(true);
-  });
-  useEffect(()=>{void run(async()=>{
-    const version=revision.current;
-    const [cats,providers]=await Promise.all([options('categories/'),api<Page<Provider>>('providers/',session.token)]);
-    setCategories(cats);
-    if(version===revision.current){setPage(providers);setSearched(true);}
-  });},[]);
-  const markers=(page?.results??[]).filter(p=>p.latitude!=null&&p.longitude!=null&&p.map_visible)
-    .map(p=>({id:p.id,name:p.display_name,description:`${p.categories.map(c=>c.name).join(' · ')}${p.distance_km!=null ? ` · ${p.distance_km} km en línea recta` : ''}`,latitude:p.latitude!,longitude:p.longitude!}));
-  const rows=selected ? page?.results.filter(p=>p.id===selected) : page?.results;
-  return <>
-    <Text style={s.heading}>Encuentra ayuda cerca de ti</Text>
-    <Text style={s.body}>Toca el mapa donde necesitas el servicio y busca prestadores. Los puntos son zonas de atención publicadas, no ubicaciones en vivo.</Text>
-    <ServiceMap point={point} markers={markers} onPoint={choosePoint} onSelect={setSelected}/>
-    <Card>
-      <Text style={s.title}>{point ? 'Ubicación seleccionada' : 'Indica dónde necesitas ayuda'}</Text>
-      <Text style={s.body}>Toca el mapa y pulsa Buscar. Confirmarás la dirección al solicitar el servicio.</Text>
-      <Button secondary label={advanced ? 'Ocultar ubicación manual' : 'Ingresar ubicación manual'} onPress={()=>setAdvanced(!advanced)}/>
-      {advanced&&<>
-      <Field label="Latitud" value={latitude} onChangeText={v=>{invalidate();setPoint(null);setLatitude(v);}} keyboardType="numbers-and-punctuation" placeholder="-33.4489"/>
-      <Field label="Longitud" value={longitude} onChangeText={v=>{invalidate();setPoint(null);setLongitude(v);}} keyboardType="numbers-and-punctuation" placeholder="-70.6693"/>
-      <Button secondary label="Usar estas coordenadas" onPress={()=>void run(async()=>{
-        const p={latitude:Number(latitude.replace(',','.')),longitude:Number(longitude.replace(',','.'))};
-        if(!validPoint(p))throw new Error('Ingresa un punto válido dentro del área de Santiago.');
-        choosePoint(p);
-      })}/>
+  const [loading,setLoading]=useState(false);
+  const [error,setError]=useState('');
+  const [retry,setRetry]=useState(0);
+  useEffect(()=>{let active=true;options('categories/').then(value=>{if(active)setCategories(value);}).catch(()=>{});return()=>{active=false;};},[]);
+  // Cada cambio invalida su respuesta anterior. No se sigue ninguna URL externa de paginación.
+  useEffect(()=>{
+    let active=true;setLoading(true);setError('');setSelected(null);
+    const timer=setTimeout(()=>{
+      const q=new URLSearchParams({page:String(number)});
+      if(category){const c=categories.find(c=>c.id===category);if(c)q.set('category',c.slug);}
+      if(point){q.set('latitude',String(point.latitude));q.set('longitude',String(point.longitude));q.set('radius_km',String(radius));}
+      api<Page<Provider>>(`providers/?${q}`,session.token).then(value=>{if(active)setPage(value);}).catch(e=>{if(active){setPage(null);setError(e.message);}}).finally(()=>{if(active)setLoading(false);});
+    },250);
+    return()=>{active=false;clearTimeout(timer);};
+  },[point,category,radius,number,retry]);
+  const rows=page?.results??[];
+  const chosen=rows.find(p=>p.id===selected);
+  const markers=rows.filter(p=>p.map_visible&&p.latitude!=null&&p.longitude!=null).map(p=>({id:p.id,name:p.display_name,description:p.categories.map(c=>c.name).join(' · '),latitude:p.latitude!,longitude:p.longitude!}));
+  const choosePoint=(value:Point)=>{setPage(null);setPoint(value);setNumber(1);};
+  const inset=width>700?28:14;
+  const panelWidth=width>800?430:undefined;
+  return <View style={{height:canvasHeight,backgroundColor:'#E6EAE7'}}>
+    <ServiceMap immersive height={canvasHeight} point={point} markers={markers} selectedId={selected} onPoint={choosePoint} onSelect={setSelected}/>
+    <View pointerEvents="box-none" style={{position:'absolute',top:16,left:inset,right:inset,gap:10}}>
+      <View style={{backgroundColor:'white',borderRadius:20,padding:16,boxShadow:'0 3px 18px #122f3a18',gap:4,maxWidth:480}}>
+        <Text style={{fontSize:12,fontWeight:'800',color:colors.muted,letterSpacing:1}}>SERVICIOS PARA TU HOGAR · SANTIAGO</Text>
+        <Text style={{fontSize:22,fontWeight:'800',color:colors.ink}}>{point?'Ayuda cerca de este punto':'¿Dónde necesitas ayuda?'}</Text>
+        <Text style={{fontSize:14,color:colors.muted}}>Toca el mapa para indicar la ubicación del servicio</Text>
+      </View>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{gap:8}}>
+        {[{id:0,name:'Todos'},...categories].map(c=><Pressable key={c.id} accessibilityRole="button" accessibilityState={{selected:category===c.id}} onPress={()=>{setCategory(c.id);setNumber(1);setPage(null);}} style={{paddingHorizontal:18,paddingVertical:13,borderRadius:24,backgroundColor:category===c.id?colors.ink:'white'}}><Text style={{fontSize:15,fontWeight:'700',color:category===c.id?'white':colors.ink}}>{c.name}</Text></Pressable>)}
+      </ScrollView>
+    </View>
+    <View style={{position:'absolute',bottom:width>800?18:0,left:width>800?28:0,right:width>800?undefined:0,width:panelWidth,backgroundColor:'white',borderRadius:width>800?24:0,borderTopLeftRadius:28,borderTopRightRadius:28,padding:18,gap:10,boxShadow:'0 -4px 24px #122f3a18'}}>
+      <View style={{alignSelf:'center',width:38,height:4,borderRadius:3,backgroundColor:'#DCE4E3'}}/>
+      {chosen?<>
+        <View style={{flexDirection:'row',alignItems:'center',gap:12}}>
+          <ProviderPortrait provider={chosen} size={64}/>
+          <View style={{flex:1,gap:4}}><Text style={s.title}>{chosen.display_name}</Text><ProviderRating provider={chosen}/></View>
+          <Pressable accessibilityRole="button" accessibilityLabel="Cerrar ficha del prestador" onPress={()=>setSelected(null)} style={{padding:10}}><Text style={{fontSize:14,fontWeight:'700'}}>Cerrar</Text></Pressable>
+        </View>
+        <Text style={{fontSize:14,fontWeight:'700',color:colors.ink}}>{chosen.categories.map(c=>c.name).join(' · ')}{chosen.distance_km!=null?` · ${chosen.distance_km} km`:''}</Text>
+        <ScrollView style={{maxHeight:90}}><Text style={{fontSize:16,color:colors.muted,lineHeight:23}}>{chosen.description||'Este prestador todavía no agregó una descripción.'}</Text></ScrollView>
+        <Button label="Solicitar una cotización" disabled={busy} onPress={()=>onChoose({...chosen,...(point?{requested_point:point}:{})})}/>
+      </>:<>
+        <View style={{flexDirection:'row',alignItems:'center',gap:10}}><Text style={s.title}>{loading?'Buscando…':point?'Prestadores cerca de ti':'Elige un prestador'}</Text>{loading&&<ActivityIndicator color={colors.ink}/>}</View>
+        {!!error?<><Text style={{color:'#842E22'}}>{error}</Text><Button secondary label="Volver a intentar" onPress={()=>setRetry(retry+1)}/></>:<>
+          <Text style={{fontSize:14,color:colors.muted}}>{rows.length?'Toca su marcador o desliza las tarjetas.':loading?'Buscamos servicios para tu hogar.':'Sin resultados. Prueba otra zona o especialidad.'}</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{gap:10}}>
+            {rows.map(p=><Pressable key={p.id} accessibilityRole="button" accessibilityLabel={`Ver perfil de ${p.display_name}`} onPress={()=>setSelected(p.id)} style={{width:240,borderWidth:1,borderColor:'#DCE4E3',borderRadius:16,padding:12,gap:7}}><View style={{flexDirection:'row',gap:10,alignItems:'center'}}><ProviderPortrait provider={p} size={40}/><Text style={{fontSize:16,fontWeight:'800',color:colors.ink,flex:1}} numberOfLines={1}>{p.display_name}</Text></View><ProviderRating provider={p}/><Text style={{fontSize:13,color:colors.muted}} numberOfLines={1}>{p.categories.map(c=>c.name).join(' · ')}{p.distance_km!=null?` · ${p.distance_km} km`:''}</Text></Pressable>)}
+          </ScrollView>
+          <View style={{flexDirection:'row',alignItems:'center',justifyContent:'space-between'}}>
+            <Pressable accessibilityRole="button" onPress={()=>{setRadius(radius===10?20:radius===20?30:10);setNumber(1);setPage(null);}} style={{paddingVertical:10}}><Text style={{fontSize:14,fontWeight:'700'}}>Radio: {radius} km · Cambiar</Text></Pressable>
+            {number>1&&<Pressable accessibilityRole="button" onPress={()=>setNumber(number-1)} style={{padding:10}}><Text>Anterior</Text></Pressable>}
+            {page?.next&&<Pressable accessibilityRole="button" onPress={()=>setNumber(number+1)} style={{padding:10}}><Text>Siguientes</Text></Pressable>}
+          </View>
+        </>}
       </>}
-      <Text style={s.label}>Buscar a una distancia de</Text>
-      <Chips items={[3,5,10,20,30].map(id=>({id,name:`${id} km`}))} selected={[radius]} onSelect={v=>{invalidate();setRadius(v);}}/>
-      <Text style={s.label}>Especialidad</Text>
-      <Chips items={[{id:0,name:'Todas'},...categories]} selected={[category]} onSelect={v=>{invalidate();setCategory(v);}}/>
-      <Field label="Nombre o especialidad" value={search} onChangeText={v=>{invalidate();setSearch(v);}}/>
-      <Button label={point ? 'Buscar cerca de este punto' : 'Ver catálogo sin ubicación'} busy={busy} onPress={()=>void load()}/>
-      {point&&<Button secondary label="Quitar ubicación" onPress={()=>{invalidate();setPoint(null);setLatitude('');setLongitude('');}}/>}
-    </Card>
-    {page&&<Text style={s.title}>{page.count} prestadores {point ? `en ${radius} km` : 'en el catálogo'}</Text>}
-    {selected&&<Button secondary label="Ver todos los resultados" onPress={()=>setSelected(null)}/>}
-    {searched&&page?.count===0&&<Text style={s.body}>No hay prestadores publicados en esta zona con estos filtros. Amplía el radio o cambia la especialidad.</Text>}
-    {rows?.map(p=><Card key={p.id}>
-      <Text style={s.title}>{p.display_name}</Text>
-      <Text style={s.body}>{p.categories.map(c=>c.name).join(' · ')}</Text>
-      <Text style={s.body}>{p.description}</Text>
-      <Text style={s.label}>{p.distance_km!=null ? `${p.distance_km} km en línea recta · ` : ''}{p.communes.map(c=>c.name).join(', ')}</Text>
-      <Button label="Ver y solicitar" disabled={busy} onPress={()=>onChoose({...p,...(point ? {requested_point:point} : {})})}/>
-    </Card>)}
-    {page&&<View style={{gap:8}}><Text style={s.body}>Página {number}. El mapa muestra los prestadores de esta página. Cercanía no garantiza disponibilidad ni cobertura de tu comuna.</Text>
-      {number>1&&<Button secondary label="Anterior" busy={busy} onPress={()=>void load(number-1)}/>}
-      {page.next&&<Button secondary label="Siguiente" busy={busy} onPress={()=>void load(number+1)}/>}
-    </View>}
-  </>;
+      <Text style={{fontSize:12,color:colors.muted}}>Zonas publicadas · Sin seguimiento en vivo</Text>
+      <Text accessibilityRole="link" onPress={()=>void Linking.openURL("https://www.openstreetmap.org/copyright")} style={{fontSize:12,color:colors.ink,textDecorationLine:"underline"}}>© OpenStreetMap contributors</Text>
+    </View>
+  </View>;
 }

@@ -25,6 +25,8 @@ class ProviderListSerializer(serializers.ModelSerializer):
     latitude = serializers.SerializerMethodField()
     longitude = serializers.SerializerMethodField()
     distance_km = serializers.SerializerMethodField()
+    avg_rating = serializers.FloatField(read_only=True, allow_null=True)
+    rating_count = serializers.IntegerField(read_only=True)
 
     def get_latitude(self, obj):
         return obj.latitude if obj.map_visible else None
@@ -49,7 +51,7 @@ class ProviderListSerializer(serializers.ModelSerializer):
             'id', 'user_id', 'display_name', 'description',
             'years_experience', 'phone', 'categories', 'communes',
             'is_active', 'is_verified',
-            'latitude', 'longitude', 'map_visible', 'distance_km',
+            'latitude', 'longitude', 'map_visible', 'distance_km', 'avatar', 'avg_rating', 'rating_count',
         ]
         read_only_fields = fields
 

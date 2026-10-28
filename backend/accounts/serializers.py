@@ -158,7 +158,7 @@ class ProviderProfileReadSerializer(serializers.ModelSerializer):
             'id', 'user_id', 'display_name', 'description',
             'years_experience', 'phone', 'categories', 'communes',
             'is_active', 'is_verified',
-            'latitude', 'longitude', 'map_visible',
+            'latitude', 'longitude', 'map_visible', 'avatar',
         ]
         read_only_fields = fields
 

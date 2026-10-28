@@ -176,7 +176,7 @@ function MobileApp() {
           <ScrollView
             ref={scroll}
             keyboardShouldPersistTaps="handled"
-            contentContainerStyle={s.content}
+            contentContainerStyle={session && tab === "explore" && !route ? {flexGrow:1} : s.content}
           >
             {route && (
               <Button

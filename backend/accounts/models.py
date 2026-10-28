@@ -79,6 +79,7 @@ class ProviderProfile(models.Model):
         limit_choices_to={'role': User.Role.PROVIDER},
     )
     display_name = models.CharField('nombre visible', max_length=120)
+    avatar = models.TextField(blank=True, editable=False)
     description = models.TextField('descripción', blank=True)
     years_experience = models.PositiveIntegerField(
         'años de experiencia', null=True, blank=True,

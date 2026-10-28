@@ -17,6 +17,9 @@ export type MapProps = {
   onSelect?: (id: number) => void;
   readOnly?: boolean;
   actionLabel?: string;
+  height?: number;
+  immersive?: boolean;
+  selectedId?: number | null;
 };
 export function handleMapMessage(raw: unknown, props: MapProps) {
   let data: any;

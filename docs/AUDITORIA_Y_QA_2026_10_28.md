@@ -124,3 +124,6 @@ Preparación: instalar dependencias, migrar, habilitar `DJANGO_DEBUG=true` y `PA
 - Política de tiles OSM: https://operations.osmfoundation.org/policies/tiles/
 
 OSM ofrece cartografía pública con atribución y políticas de uso, no una garantía de servicio gratuito ilimitado. No se incorporó Nominatim ni búsqueda automática de domicilios.
+
+## Actualización: mapa y entregables
+La interfaz de exploración ahora prioriza el mapa con filtros flotantes y ficha de prestador. El punto se selecciona tocando el mapa; los campos manuales de coordenadas de la exploración anterior fueron retirados. Se añadió foto de perfil normalizada y valoración media real con contador. La suite actual tiene 70 pruebas backend y 10 de contrato móvil; véase [registro vigente](PRUEBAS.md) y [entregables](ENTREGABLES.md).

@@ -17,6 +17,7 @@ import ServiceMap from './ServiceMap';
 import { DemoWallet } from './wallet';
 import { EvidencePanel } from './evidence';
 import { DisputePanel } from './dispute';
+import { ProfilePhoto } from './profile-photo';
 export { Explore } from './explore-map';
 export type Run = (job: () => Promise<void>) => Promise<void>;
 export const money = (value: number) => `$${value.toLocaleString("es-CL")}`;
@@ -673,6 +674,7 @@ export function Profile({
       {profile && (
         <Card>
           <Text style={s.title}>Haz que te encuentren</Text>
+          <ProfilePhoto profile={profile} session={session} run={run} busy={busy} onPhoto={avatar=>setProfile(current=>current?{...current,avatar}:current)}/>
           <Text style={s.body}>Selecciona un punto público de atención. Se mostrará a los clientes cuando publiques tu zona; evita indicar tu domicilio privado. No es tu ubicación en tiempo real.</Text>
           <ServiceMap point={profile.latitude != null && profile.longitude != null ? {latitude:profile.latitude,longitude:profile.longitude} : null}
             markers={[]} onPoint={point=>{setSaved(false);setProfile({...profile,...point});}} />
