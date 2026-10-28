@@ -14,7 +14,8 @@ from django.db import transaction
 from accounts.models import User, ProviderProfile
 from catalog.models import Category, Commune
 from services.models import ServiceRequest, Quote, Rating
-from billing.models import MaterialExtra, PaymentOrder, ServiceMessage
+from billing.models import MaterialExtra, PaymentOrder, ServiceMessage, ServiceDispute
+from services.models import WorkEvidence
 from django.db.models import Q
 
 
@@ -393,7 +394,7 @@ class Command(BaseCommand):
         """
         self.stdout.write(self.style.WARNING('Eliminando datos de demostración...'))
         related = ServiceRequest.objects.filter(Q(client__username__in=DEMO_USERNAMES) | Q(provider__username__in=DEMO_USERNAMES))
-        if any(model.objects.filter(service_request__in=related).exists() for model in (MaterialExtra, PaymentOrder, ServiceMessage)):
+        if any(model.objects.filter(service_request__in=related).exists() for model in (MaterialExtra, PaymentOrder, ServiceMessage, ServiceDispute, WorkEvidence)):
             raise CommandError('Hay materiales, liquidaciones o mensajes asociados a la demo. Usa una base de pruebas nueva para conservar ese historial.')
         User.objects.filter(username__in=DEMO_USERNAMES).delete()
         self.stdout.write('  Datos eliminados.')

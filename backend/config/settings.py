@@ -207,3 +207,8 @@ LOGGING = {
 PAYMENTS_DEMO_ENABLED = os.environ.get('PAYMENTS_DEMO_ENABLED', 'false').lower() == 'true'
 # Tasa ilustrativa, no determina el tratamiento tributario del comercio.
 DEMO_VAT_PERCENT = int(os.environ.get('DEMO_VAT_PERCENT', '19'))
+
+# Sustituible sin recompilar la app. Respetar atribución y caché del proveedor.
+MAP_TILE_URL = os.environ.get('MAP_TILE_URL', 'https://tile.openstreetmap.org/{z}/{x}/{y}.png')
+MEDIA_ROOT = BASE_DIR / 'media'
+DATA_UPLOAD_MAX_MEMORY_SIZE = 3 * 1024 * 1024

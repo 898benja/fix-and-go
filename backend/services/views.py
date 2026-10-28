@@ -374,8 +374,8 @@ def request_complete(request, pk):
         return _not_found()
 
     # Solo las partes involucradas pueden completar
-    if request.user.id not in (sr.client_id, sr.provider_id):
-        return _forbidden('Solo las partes involucradas pueden completar el servicio.')
+    if request.user.id != sr.client_id:
+        return _forbidden('Solo el cliente puede confirmar que el trabajo fue realizado.')
 
     if not sr.can_transition_to(ServiceRequest.Status.COMPLETED):
         return _conflict(

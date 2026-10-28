@@ -13,6 +13,7 @@ from rest_framework.response import Response
 from accounts.models import ProviderProfile
 from core.pagination import paginate_queryset
 from .models import Category, Commune
+from .geo import NearbyQuery, nearby
 from .serializers import (
     CategorySerializer,
     CommuneSerializer,
@@ -106,6 +107,10 @@ def provider_list(request):
         ),
     )
 
+    if any(k in request.query_params for k in ('latitude', 'longitude', 'radius_km')):
+        query = NearbyQuery(data=request.query_params)
+        query.is_valid(raise_exception=True)
+        qs = nearby(qs, query.validated_data)
     return paginate_queryset(request, qs, ProviderListSerializer)
 
 

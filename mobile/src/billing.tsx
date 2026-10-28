@@ -4,9 +4,10 @@ import { Text, View } from "react-native";
 import { api, Page, Session } from "./api";
 import type { Run } from "./screens";
 import { Button, Card, Field, s } from "./ui";
+import { DemoWallet } from './wallet';
 const money = (n: number) => `$${n.toLocaleString("es-CL")} CLP`;
 type Extra = { id: number; description: string; quantity: number; unit_price: number; total: number; status: "PENDING" | "APPROVED" | "REJECTED" };
-type Bill = { id?: number; status: "DRAFT" | "PENDING" | "FAILED" | "DEMO_PAID"; service_amount: number; materials_amount: number; total: number; net_amount: number; vat_amount: number; vat_percent: number; has_pending_materials?: boolean; demo_enabled: boolean; snapshot: { service_description: string; materials: Extra[] }; paid_at?: string; title?: string };
+type Bill = { id?: number; status: "DRAFT" | "PENDING" | "FAILED" | "DEMO_PAID" | "DEMO_REFUNDED"; service_amount: number; materials_amount: number; total: number; net_amount: number; vat_amount: number; vat_percent: number; commission_percent:number; commission_amount:number; provider_amount:number; has_pending_materials?: boolean; demo_enabled: boolean; snapshot: { service_description: string; materials: Extra[] }; paid_at?: string; title?: string };
 type Message = { id: number; sender_id: number; text: string; created_at: string };
 export type BillingData = { bill: Bill; extras: Extra[] };
 // Page numbers are rebuilt locally: tokens are never sent to a next URL supplied by a server.
@@ -41,6 +42,7 @@ export function BillingPanel({id, session, status, data, busy, run, refresh}: {
   const client = session.user.role === "CLIENT";
   const frozen = bill.status !== "DRAFT";
   const paid = bill.status === "DEMO_PAID";
+  const refunded = bill.status === 'DEMO_REFUNDED';
   const path = `requests/${id}/`;
   const loadMessages = async () => setMessages(await allPages<Message>(`${path}messages/`, session.token));
   const decide = (extra: Extra, decision: "APPROVED" | "REJECTED") => run(async () => {
@@ -73,20 +75,23 @@ export function BillingPanel({id, session, status, data, busy, run, refresh}: {
       {frozen && <Text style={s.body}>El total ya fue confirmado; los materiales están cerrados.</Text>}
     </Card>
     <Card>
-      <Text style={s.title}>Resumen del cobro final</Text>
+      <Text style={s.title}>Revisa el total antes de pagar</Text>
       <Text style={s.body}>Servicio: {money(bill.service_amount)}</Text>
       <Text style={s.body}>Materiales aprobados: {money(bill.materials_amount)}</Text>
       <Text style={s.heading}>{money(bill.total)}</Text>
       <Text style={s.body}>Neto: {money(bill.net_amount)} · IVA ilustrativo incluido ({bill.vat_percent}%): {money(bill.vat_amount)}</Text>
-      <Text style={s.badge}>{{DRAFT:"Por confirmar", PENDING:"Demo pendiente", FAILED:"Demo rechazada", DEMO_PAID:"Demo aprobada"}[bill.status]}</Text>
+      <Text style={s.body}>Comisión FIX&GO ({bill.commission_percent}% del servicio): {money(bill.commission_amount)}. Incluida en el precio, no se suma al cliente.</Text>
+      <Text style={s.body}>Para el prestador: {money(bill.provider_amount)}, incluidos materiales. Es un desglose de demostración, no una transferencia.</Text>
+      <Text style={s.badge}>{{DRAFT:"Por confirmar", PENDING:"Demo pendiente", FAILED:"Demo rechazada", DEMO_PAID:"Demo aprobada",DEMO_REFUNDED:'Reembolsado · demo'}[bill.status]}</Text>
       <Text style={s.body}>Demostración académica: no se realiza ningún cobro real ni se genera una boleta tributaria. No ingreses datos de tarjetas.</Text>
       {!bill.demo_enabled && !paid && <Text style={s.body}>El pago de demostración está deshabilitado en este servidor.</Text>}
       {bill.has_pending_materials && <Text style={s.body}>Resuelve los materiales pendientes antes de confirmar el total.</Text>}
-      {status !== "COMPLETED" && <Text style={s.body}>El cobro único se habilita cuando el servicio esté completado.</Text>}
-      {client && status === "COMPLETED" && !frozen && <Button label="Confirmar total para demostración" busy={busy} disabled={!bill.demo_enabled || bill.has_pending_materials} onPress={() => void run(async () => {
+      {!paid&&!refunded&&<Text style={s.body}>Acepta la cotización y resuelve los materiales. Después paga la demostración para habilitar el chat y comenzar el trabajo.</Text>}
+      {client && status === "ACCEPTED" && !frozen && <Button label="Confirmar total para demostración" busy={busy} disabled={!bill.demo_enabled || bill.has_pending_materials} onPress={() => void run(async () => {
         await api(`${path}checkout/`, session.token, "POST", {}); await refresh();
       })} />}
-      {client && frozen && !paid && bill.demo_enabled && <>
+      {client && frozen && !paid && !refunded && bill.demo_enabled && <>
+        <DemoWallet session={session} run={run} busy={busy}/>
         <Button label={bill.status === "FAILED" ? "Reintentar demo con aprobación" : "Simular pago aprobado"} busy={busy} onPress={() => void run(async () => {
           await api(`${path}payment/demo-result/`, session.token, "POST", {outcome:"approved"}); await refresh();
         })} />
@@ -94,7 +99,7 @@ export function BillingPanel({id, session, status, data, busy, run, refresh}: {
           await api(`${path}payment/demo-result/`, session.token, "POST", {outcome:"rejected"}); await refresh();
         })} />
       </>}
-      {paid && <Button secondary label="Ver comprobante de demostración" busy={busy} onPress={() => void run(async () => setReceipt(await api<Bill>(`${path}receipt/`, session.token)))} />}
+      {(paid||refunded) && <Button secondary label="Ver comprobante de demostración" busy={busy} onPress={() => void run(async () => setReceipt(await api<Bill>(`${path}receipt/`, session.token)))} />}
       {receipt && <View style={{gap:8}}>
         <Text style={s.title}>{receipt.title}</Text>
         <Text style={s.body}>Orden #{receipt.id} · {receipt.paid_at ? new Date(receipt.paid_at).toLocaleString("es-CL") : ""}</Text>
@@ -105,7 +110,7 @@ export function BillingPanel({id, session, status, data, busy, run, refresh}: {
     </Card>
     <Card>
       <Text style={s.title}>Conversación del servicio</Text>
-      {!paid ? <Text style={s.body}>Se habilita después de aprobar el pago de demostración.</Text> : <>
+      {!paid ? <Text style={s.body}>{refunded?'Conversación cerrada después del reembolso.':'Se habilita después de aprobar el pago de demostración.'}</Text> : <>
         <Button secondary label={messages ? "Actualizar conversación" : "Abrir conversación"} busy={busy} onPress={() => void run(loadMessages)} />
         {messages?.length === 0 && <Text style={s.body}>Todavía no hay mensajes.</Text>}
         {messages?.map(m => <View key={m.id} style={{padding:12, borderRadius:12, backgroundColor:m.sender_id === session.user.id ? "#FFF1BD" : "#EDF2F2", gap:4}}>

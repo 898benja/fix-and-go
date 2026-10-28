@@ -4,7 +4,7 @@ App académica de servicios para el hogar en Santiago. Cliente React Native + Ex
 
 ## Recorrido implementado
 
-Registro e inicio de sesión → perfil reutilizable → búsqueda de prestador → solicitud → cotización → aceptación → inicio del servicio → materiales propuestos y aprobados/rechazados → término del servicio → un cobro final demo → comprobante demo y conversación interna. El cliente también puede valorar el trabajo completado.
+Registro e inicio de sesión → perfil reutilizable → mapa de prestadores → solicitud → cotización aceptada → materiales aprobados/rechazados → pago único demo con tarjeta ficticia guardada → chat e inicio del trabajo → fotos del resultado → confirmación del cliente → valoración. Un reclamo abre una revisión administrativa; aprobarlo genera reembolso demo y alerta al prestador. Tres alertas confirmadas deshabilitan su cuenta, conservando el historial.
 
 - Roles separados: cliente y prestador; permisos por propietario en cada solicitud.
 - Datos personales editables: nombre, apellido, teléfono, dirección y comuna habitual. La app reutiliza dirección y comuna al pedir otro servicio; puede modificarlas antes de enviar.
@@ -13,9 +13,15 @@ Registro e inicio de sesión → perfil reutilizable → búsqueda de prestador 
 - Una sola orden por solicitud, snapshot de importes, rechazo y reintento sin duplicar órdenes.
 - Teléfonos ocultos en el catálogo; conversación posterior al pago demo, con actualización manual.
 - Tokens con expiración de 24 horas. SecureStore en dispositivos; memoria en la vista web.
-- Administración de solicitudes, cotizaciones, materiales y liquidaciones en modo consulta para evitar saltarse el flujo.
+- Inicio del prestador con resumen, trabajos recientes, clientes atendidos y mapa privado de sus solicitudes.
+- Mapa Leaflet/OpenStreetMap con búsqueda por radio, puntos de atención voluntariamente publicados y ubicación privada de la solicitud. Requiere Internet para cargar cartografía.
+- Comisión del 30% del servicio, sin comisión sobre materiales, incluida en el total; desglose calculado en servidor.
+- Fotos privadas JPEG/PNG/WebP: hasta 10 por trabajo, 2 MB y 16 MP por archivo; se normalizan a JPEG sin EXIF.
+- Administración de operaciones en modo consulta; los reclamos tienen una pantalla específica de revisión con fundamento obligatorio.
 
-**Fuera del cierre actual:** pasarela bancaria real, tokenización/guardado de tarjetas, boletas tributarias, llamadas, notificaciones push, verificación profesional y distribución en tiendas. No hay cuenta de comercio ni proveedor de pagos elegido. La app no solicita PAN ni CVV.
+**Fuera del MVP:** pasarela bancaria y tokenización reales, boletas tributarias, transferencias al prestador, llamadas, notificaciones push, GPS en vivo, geocodificación de direcciones, verificación profesional y distribución en tiendas. No hay cuenta de comercio ni proveedor de pagos elegido. La tarjeta guardada es un identificador ficticio; la app no solicita PAN ni CVV.
+
+Consulta la [auditoría y guía de QA vigente](docs/AUDITORIA_Y_QA_2026_10_28.md). Los informes anteriores describen versiones históricas; este recorrido reemplaza el cobro posterior al término del servicio.
 
 ## Ejecutar en el Mac
 

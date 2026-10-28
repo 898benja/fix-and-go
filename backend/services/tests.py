@@ -5,6 +5,7 @@ from rest_framework.test import APITestCase
 from accounts.models import ProviderProfile, User
 from catalog.models import Category, Commune
 from .models import Quote, ServiceRequest
+from django.test import override_settings
 
 
 class RequestWorkflowTests(APITestCase):
@@ -118,12 +119,27 @@ class RequestWorkflowTests(APITestCase):
         self.sr.refresh_from_db()
         self.assertEqual(self.sr.status, 'PENDING')
 
+    @override_settings(DEBUG=True, PAYMENTS_DEMO_ENABLED=True)
     def test_complete_service_and_rate_full_flow(self):
         self.quote()
         self.post_as(self.customer, 'quote-accept')
-
+        self.assertEqual(self.post_as(self.provider,'request-start').status_code,409)
+        self.client.force_authenticate(self.customer)
+        self.client.post('/api/v1/wallet/demo-card/',{},format='json')
+        self.assertEqual(self.post_as(self.customer,'checkout').status_code,201)
+        self.assertEqual(self.post_as(self.customer,'demo-payment-result',{'outcome':'approved'}).status_code,200)
         self.assertEqual(self.post_as(self.provider, 'request-start').status_code, 200)
-        self.assertEqual(self.post_as(self.customer, 'request-complete').status_code, 200)
+        self.assertEqual(self.post_as(self.customer, 'request-complete').status_code, 409)
+        # Foto real creada y subida mediante el contrato API, en almacenamiento temporal.
+        import io, base64, tempfile
+        from PIL import Image
+        image=Image.new('RGB',(10,10),'white');buffer=io.BytesIO();image.save(buffer,format='PNG')
+        with tempfile.TemporaryDirectory() as directory, override_settings(MEDIA_ROOT=directory):
+            self.client.force_authenticate(self.provider)
+            upload=self.client.post(f'/api/v1/requests/{self.sr.pk}/evidence/',{'image_base64':base64.b64encode(buffer.getvalue()).decode()},format='json')
+            self.assertEqual(upload.status_code,201)
+            self.assertEqual(self.post_as(self.provider,'request-complete').status_code,403)
+            self.assertEqual(self.post_as(self.customer,'request-complete').status_code,200)
 
         response = self.post_as(self.customer, 'request-rating', {
             'score': 5,

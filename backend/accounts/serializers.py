@@ -158,6 +158,7 @@ class ProviderProfileReadSerializer(serializers.ModelSerializer):
             'id', 'user_id', 'display_name', 'description',
             'years_experience', 'phone', 'categories', 'communes',
             'is_active', 'is_verified',
+            'latitude', 'longitude', 'map_visible',
         ]
         read_only_fields = fields
 
@@ -198,7 +199,21 @@ class ProviderProfileWriteSerializer(serializers.ModelSerializer):
         fields = [
             'display_name', 'description', 'years_experience',
             'phone', 'categories', 'communes', 'is_active',
+            'latitude', 'longitude', 'map_visible',
         ]
+
+    def validate(self, attrs):
+        from catalog.geo import validate_point
+        lat = attrs.get('latitude', getattr(self.instance, 'latitude', None))
+        lon = attrs.get('longitude', getattr(self.instance, 'longitude', None))
+        visible = attrs.get('map_visible', getattr(self.instance, 'map_visible', False))
+        if (lat is None) != (lon is None):
+            raise serializers.ValidationError('Indica ambas coordenadas o elimina ambas.')
+        if lat is not None:
+            validate_point(lat, lon)
+        if visible and lat is None:
+            raise serializers.ValidationError('Selecciona un punto antes de publicar tu zona.')
+        return attrs
 
     def validate_display_name(self, value):
         """BE-05: el nombre visible no puede estar vacío."""

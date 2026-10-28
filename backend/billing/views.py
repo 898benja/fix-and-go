@@ -1,5 +1,6 @@
 """Endpoints del flujo final. Ninguna respuesta representa un cobro bancario real."""
 from django.conf import settings
+from django.db import transaction
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -68,7 +69,7 @@ def demo_result(request, pk):
 @permission_classes([IsAuthenticated])
 def receipt(request, pk):
     sr = workflow.owned(pk, request.user)
-    order = PaymentOrder.objects.filter(service_request=sr, status='DEMO_PAID').first()
+    order = PaymentOrder.objects.filter(service_request=sr, status__in=['DEMO_PAID','DEMO_REFUNDED']).first()
     if not order:
         raise NotFound('No hay comprobante de demostración aprobado.')
     return Response({'title': 'Comprobante de demostración — no es boleta', **PaymentRead(order).data})
@@ -76,10 +77,11 @@ def receipt(request, pk):
 
 @api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticated])
+@transaction.atomic
 def messages(request, pk):
     # Restricción literal solicitada: conversación disponible después del pago demo.
     # No implica protección contra contactos escritos en campos libres o fuera de la app.
-    sr = workflow.owned(pk, request.user)
+    sr = workflow.owned(pk, request.user, lock=request.method=='POST')
     if not PaymentOrder.objects.filter(service_request=sr, status='DEMO_PAID').exists():
         raise PermissionDenied('La conversación se habilita tras el pago de demostración.')
     if request.method == 'POST':

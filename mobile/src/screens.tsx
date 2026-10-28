@@ -13,6 +13,11 @@ import {
 } from "./api";
 import { Button, Card, Chips, colors, Field, s } from "./ui";
 import { BillingPanel, loadBilling, BillingData } from "./billing";
+import ServiceMap from './ServiceMap';
+import { DemoWallet } from './wallet';
+import { EvidencePanel } from './evidence';
+import { DisputePanel } from './dispute';
+export { Explore } from './explore-map';
 export type Run = (job: () => Promise<void>) => Promise<void>;
 export const money = (value: number) => `$${value.toLocaleString("es-CL")}`;
 
@@ -168,186 +173,6 @@ export function Access({
   );
 }
 
-export function Explore({
-  session,
-  run,
-  busy,
-  onChoose,
-}: {
-  session: Session;
-  run: Run;
-  busy: boolean;
-  onChoose: (provider: Provider) => void;
-}) {
-  const [categories, setCategories] = useState<Option[]>([]);
-  const [communes, setCommunes] = useState<Option[]>([]);
-  const [showAreas, setShowAreas] = useState(false);
-  const [category, setCategory] = useState(0);
-  const [commune, setCommune] = useState(0);
-  const [search, setSearch] = useState("");
-  const [page, setPage] = useState<Page<Provider> | null>(null);
-  const [number, setNumber] = useState(1);
-  const load = (n = 1) =>
-    run(async () => {
-      const query = new URLSearchParams({
-        page: String(n),
-        search: search.trim(),
-      });
-      if (category)
-        query.set("category", categories.find((c) => c.id === category)!.slug);
-      if (commune)
-        query.set("commune", communes.find((c) => c.id === commune)!.slug);
-      const result = await api<Page<Provider>>(
-        `providers/?${query}`,
-        session.token,
-      );
-      setPage(result);
-      setNumber(n);
-    });
-  useEffect(() => {
-    void run(async () => {
-      const [cats, areas, providers] = await Promise.all([
-        options("categories/"),
-        options("communes/"),
-        api<Page<Provider>>("providers/", session.token),
-      ]);
-      setCategories(cats);
-      setCommunes(areas);
-      setPage(providers);
-    });
-  }, []);
-  return (
-    <>
-      <View style={s.hero}>
-        <Text style={{ color: "#CCDCDD" }}>
-          Hola, {session.user.first_name}
-        </Text>
-        <Text style={[s.heading, { color: "white" }]}>
-          {"¿Qué necesita\ntu hogar hoy?"}
-        </Text>
-        <Text style={{ color: colors.yellow }}>
-          Servicios cerca de ti · Santiago
-        </Text>
-      </View>
-      <Card>
-        <Field
-          label="Buscar especialista"
-          placeholder="Nombre o especialidad"
-          value={search}
-          onChangeText={setSearch}
-        />
-        <Text style={s.label}>Especialidad</Text>
-        <Chips
-          items={[{ id: 0, name: "Todas" }, ...categories]}
-          selected={[category]}
-          onSelect={setCategory}
-        />
-        <Button
-          secondary
-          label={
-            showAreas
-              ? "Ocultar comunas"
-              : `Comuna: ${communes.find((c) => c.id === commune)?.name ?? "Todas"}`
-          }
-          onPress={() => setShowAreas(!showAreas)}
-        />
-        {showAreas && (
-          <Chips
-            items={[{ id: 0, name: "Todas" }, ...communes]}
-            selected={[commune]}
-            onSelect={(id) => {
-              setCommune(id);
-              setShowAreas(false);
-            }}
-          />
-        )}
-        <Button
-          label="Buscar servicios"
-          busy={busy}
-          onPress={() => void load()}
-        />
-      </Card>
-      <Text style={s.title}>
-        {page ? `${page.count} especialistas` : "Especialistas"}
-      </Text>
-      {!page && !busy && (
-        <Button secondary label="Reintentar" onPress={() => void load()} />
-      )}
-      {page?.results.length === 0 && (
-        <Card>
-          <Text style={s.body}>
-            No encontramos prestadores con estos filtros. Prueba otra comuna o
-            especialidad.
-          </Text>
-        </Card>
-      )}
-      {page?.results.map((p) => (
-        <Card key={p.id}>
-          <View style={{ flexDirection: "row", gap: 14, alignItems: "center" }}>
-            <View
-              style={{
-                width: 48,
-                height: 48,
-                backgroundColor: "#EDF1DE",
-                borderRadius: 16,
-                justifyContent: "center",
-                alignItems: "center",
-              }}
-            >
-              <Text style={[s.title, { fontSize: 24 }]}>
-                {p.display_name.slice(0, 1)}
-              </Text>
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={s.title}>{p.display_name}</Text>
-              <Text style={s.body}>
-                {p.categories.map((c) => c.name).join(" · ")}
-              </Text>
-            </View>
-          </View>
-          <Text style={s.body} numberOfLines={3}>
-            {p.description ||
-              "Consulta disponibilidad y solicita una cotización."}
-          </Text>
-          <Text style={s.label}>
-            {p.years_experience != null
-              ? `${p.years_experience} años de experiencia · `
-              : ""}
-            {p.communes.map((c) => c.name).join(", ")}
-          </Text>
-          <Button
-            secondary
-            label="Ver y solicitar"
-            disabled={busy}
-            onPress={() => onChoose(p)}
-          />
-        </Card>
-      ))}
-      {page && (
-        <View style={{ gap: 8 }}>
-          <Text style={s.body}>Página {number}</Text>
-          {number > 1 && (
-            <Button
-              secondary
-              label="Anterior"
-              busy={busy}
-              onPress={() => void load(number - 1)}
-            />
-          )}
-          {page.next && (
-            <Button
-              secondary
-              label="Siguiente"
-              busy={busy}
-              onPress={() => void load(number + 1)}
-            />
-          )}
-        </View>
-      )}
-    </>
-  );
-}
-
 export function NewRequest({
   provider,
   session,
@@ -412,6 +237,7 @@ export function NewRequest({
                 "POST",
                 {
                   provider_id: provider.user_id,
+                  ...(provider.requested_point ? {latitude:provider.requested_point.latitude,longitude:provider.requested_point.longitude} : {}),
                   category_id: category,
                   commune_id: commune,
                   description: description.trim(),
@@ -718,21 +544,23 @@ export function Detail({
           onPress={() => confirm("¿Cancelar la solicitud?", "cancel")}
         />
       )}
-      {!client && item.status === "ACCEPTED" && (
+      {!client && item.status === "ACCEPTED" && billing?.bill.status==='DEMO_PAID' && (
         <Button
           label="Iniciar servicio"
           busy={busy}
           onPress={() => confirm("¿Iniciar el servicio?", "start")}
         />
       )}
-      {item.status === "IN_PROGRESS" && (
+      {client && item.status === "IN_PROGRESS" && billing?.bill.status==='DEMO_PAID' && (
         <Button
-          label="Marcar servicio completado"
+          label="Confirmar que el trabajo está terminado"
           busy={busy}
           onPress={() => confirm("¿El servicio está terminado?", "complete")}
         />
       )}
+      <EvidencePanel key={id} id={id} session={session} status={item.status} run={run} busy={busy}/>
       {billing && <BillingPanel id={id} session={session} status={item.status} data={billing} busy={busy} run={run} refresh={refresh} />}
+      {billing&&['DEMO_PAID','DEMO_REFUNDED'].includes(billing.bill.status)&&<DisputePanel id={id} session={session} run={run} busy={busy} refresh={refresh}/>}
       {rating && (
         <Card>
           <Text style={s.title}>Valoración: {rating.score}/5</Text>
@@ -845,6 +673,13 @@ export function Profile({
       {profile && (
         <Card>
           <Text style={s.title}>Haz que te encuentren</Text>
+          <Text style={s.body}>Selecciona un punto público de atención. Se mostrará a los clientes cuando publiques tu zona; evita indicar tu domicilio privado. No es tu ubicación en tiempo real.</Text>
+          <ServiceMap point={profile.latitude != null && profile.longitude != null ? {latitude:profile.latitude,longitude:profile.longitude} : null}
+            markers={[]} onPoint={point=>{setSaved(false);setProfile({...profile,...point});}} />
+          <Text style={s.body}>{profile.latitude != null ? 'Punto seleccionado. Puedes cambiarlo tocando el mapa.' : 'Toca el mapa para elegir dónde ofreces tus servicios.'}</Text>
+          <Button secondary label={profile.map_visible ? 'Ocultar mi punto del mapa' : 'Publicar mi punto en el mapa'}
+            onPress={()=>{setSaved(false);setProfile({...profile,map_visible:!profile.map_visible});}} />
+          <Text style={s.body}>{profile.map_visible ? 'Zona pública: se publicará al guardar el perfil.' : 'Zona privada: no aparece en el mapa.'}</Text>
           <Field
             label="Nombre visible"
             value={profile.display_name}
@@ -891,6 +726,9 @@ export function Profile({
                   description: profile.description.trim(),
                   categories: chosenCats,
                   communes: chosenAreas,
+                  latitude: profile.latitude,
+                  longitude: profile.longitude,
+                  map_visible: profile.map_visible,
                 });
                 setSaved(true);
               })
@@ -903,6 +741,7 @@ export function Profile({
           )}
         </Card>
       )}
+      {session.user.role === 'CLIENT' && <DemoWallet session={session} run={run} busy={busy}/>}
       <Button
         secondary
         label="Cerrar sesión"
@@ -910,7 +749,7 @@ export function Profile({
         onPress={logout}
       />
       <Text style={s.body}>
-        FIX&GO · Prototipo académico. Los pagos son de demostración, sin cobros reales. No hay tarjetas guardadas ni verificación de credenciales profesionales.
+        FIX&GO · Prototipo académico. Los pagos y tarjetas son de demostración, sin cobros reales ni verificación de credenciales profesionales.
       </Text>
     </>
   );

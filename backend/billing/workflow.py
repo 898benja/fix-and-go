@@ -10,7 +10,7 @@ from django.utils import timezone
 from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
 from services.models import ServiceRequest, Quote
 from services.workflow import StateConflict
-from .models import MaterialExtra, PaymentOrder
+from .models import MaterialExtra, PaymentOrder, DemoCard
 
 
 def owned(pk, user, client=False, provider=False, lock=False):
@@ -84,7 +84,9 @@ def amounts(sr):
         raise ValidationError('Tasa de demostración inválida.')
     # Los importes existentes son totales CLP: desglosar, nunca sumar IVA dos veces.
     net = int((Decimal(total) * 100 / (100 + rate)).quantize(Decimal('1'), rounding=ROUND_HALF_UP))
+    commission=int((Decimal(quote.price)*Decimal('0.30')).quantize(Decimal('1'),rounding=ROUND_HALF_UP))
     return dict(service_amount=quote.price, materials_amount=materials, total=total,
+                commission_percent=30, commission_amount=commission, provider_amount=total-commission,
                 net_amount=net, vat_amount=total-net, vat_percent=rate,
                 snapshot={'quote_id': quote.pk, 'service_description': quote.description,
                           'materials': [{'id': x.pk, 'description': x.description, 'quantity': x.quantity,
@@ -99,8 +101,8 @@ def checkout(pk, user):
     previous = PaymentOrder.objects.filter(service_request=sr).first()
     if previous:
         return previous, False
-    if sr.status != 'COMPLETED':
-        raise StateConflict('El cobro final requiere el servicio completado.')
+    if sr.status != 'ACCEPTED':
+        raise StateConflict('El pago se confirma después de aceptar la cotización y antes de iniciar el trabajo.')
     values, pending = amounts(sr)
     if pending:
         raise StateConflict('Aprueba o rechaza todos los materiales antes de pagar.')
@@ -114,11 +116,16 @@ def demo_result(pk, user, outcome):
     order = PaymentOrder.objects.filter(service_request=sr).first()
     if order is None:
         raise NotFound('Primero crea la liquidación.')
+    if order.status == 'DEMO_REFUNDED':
+        raise StateConflict('Este pago ya fue reembolsado y no puede volver a cobrarse.')
     if order.status == 'DEMO_PAID':
         if outcome != 'approved':
             raise StateConflict('Una aprobación confirmada no puede convertirse en rechazo.')
         return order
+    if not DemoCard.objects.filter(user=user).exists():
+        raise StateConflict('Guarda primero una tarjeta de demostración en Mi perfil.')
+    order.snapshot={**order.snapshot,'card':{'brand':'DEMO','last4':'4242'}}
     order.status = 'DEMO_PAID' if outcome == 'approved' else 'FAILED'
     order.paid_at = timezone.now() if outcome == 'approved' else None
-    order.save(update_fields=['status', 'paid_at'])
+    order.save(update_fields=['status', 'paid_at', 'snapshot'])
     return order

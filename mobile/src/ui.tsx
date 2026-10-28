@@ -111,8 +111,8 @@ export const s = StyleSheet.create({
     color: colors.ink,
   },
   title: { fontSize: 20, fontWeight: "700", color: colors.ink },
-  body: { fontSize: 15, lineHeight: 23, color: colors.muted },
-  label: { fontSize: 13, fontWeight: "600", color: colors.ink },
+  body: { fontSize: 17, lineHeight: 26, color: colors.muted },
+  label: { fontSize: 15, fontWeight: "600", color: colors.ink },
   card: {
     backgroundColor: colors.white,
     borderRadius: 20,

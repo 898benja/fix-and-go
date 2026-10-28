@@ -67,6 +67,11 @@ class ProviderProfile(models.Model):
     - El perfil debe tener un nombre visible no vacío.
     """
 
+    # Punto de atención publicado voluntariamente; nunca GPS ni domicilio privado.
+    latitude = models.FloatField(null=True, blank=True)
+    longitude = models.FloatField(null=True, blank=True)
+    map_visible = models.BooleanField(default=False)
+
     user = models.OneToOneField(
         User,
         on_delete=models.CASCADE,
@@ -107,6 +112,20 @@ class ProviderProfile(models.Model):
         # BD-06: índice para búsqueda de perfiles activos
         indexes = [
             models.Index(fields=['is_active'], name='idx_provider_active'),
+            models.Index(fields=['map_visible', 'latitude', 'longitude'], name='idx_provider_map'),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=(models.Q(latitude__isnull=True, longitude__isnull=True)
+                           | models.Q(latitude__isnull=False, longitude__isnull=False,
+                                      latitude__gte=-33.85, latitude__lte=-33.1,
+                                      longitude__gte=-71.1, longitude__lte=-70.35)),
+                name='provider_point_santiago',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(map_visible=False) | models.Q(latitude__isnull=False, longitude__isnull=False),
+                name='provider_map_requires_point',
+            ),
         ]
 
     def clean(self):

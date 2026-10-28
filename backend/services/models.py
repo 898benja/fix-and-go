@@ -64,6 +64,9 @@ class ServiceRequest(models.Model):
         'dirección o referencia', blank=True,
         help_text='Dato privado: solo visible para el cliente, el prestador asignado y administradores.',
     )
+    # Ubicación de la solicitud: solo se entrega a las partes autorizadas.
+    latitude = models.FloatField(null=True, blank=True)
+    longitude = models.FloatField(null=True, blank=True)
     description = models.TextField('descripción del problema')
     preferred_date = models.DateField('fecha preferida', null=True, blank=True)
     preferred_time = models.CharField(
@@ -116,6 +119,15 @@ class ServiceRequest(models.Model):
 
     def __str__(self):
         return f'Solicitud #{self.pk} — {self.get_status_display()}'
+
+
+class WorkEvidence(models.Model):
+    """Foto privada normalizada; evidencia para revisión, no prueba automática."""
+    service_request = models.ForeignKey(ServiceRequest, on_delete=models.PROTECT, related_name='evidence')
+    uploader = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    photo = models.FileField(upload_to='work_evidence/')
+    caption = models.CharField(max_length=240, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
 
 
 class Quote(models.Model):

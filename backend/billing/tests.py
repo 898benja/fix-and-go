@@ -6,7 +6,7 @@ from rest_framework.test import APITestCase
 from accounts.models import User, ProviderProfile
 from catalog.models import Category, Commune
 from services.models import ServiceRequest, Quote
-from .models import MaterialExtra, PaymentOrder
+from .models import MaterialExtra, PaymentOrder, DemoCard
 
 @override_settings(DEBUG=True, PAYMENTS_DEMO_ENABLED=True)
 class BillingTests(APITestCase):
@@ -18,7 +18,8 @@ class BillingTests(APITestCase):
         self.profile = ProviderProfile.objects.create(user=self.provider, display_name='Prestador prueba', phone='+56912345678')
         self.profile.categories.add(self.category)
         self.profile.communes.add(self.commune)
-        self.sr = ServiceRequest.objects.create(client=self.customer, provider=self.provider, category=self.category, commune=self.commune, description='Servicio de prueba', status='COMPLETED')
+        self.sr = ServiceRequest.objects.create(client=self.customer, provider=self.provider, category=self.category, commune=self.commune, description='Servicio de prueba', status='ACCEPTED')
+        DemoCard.objects.create(user=self.customer)
         Quote.objects.create(service_request=self.sr, provider=self.provider, description='Servicio con impuesto incluido', price=35000, status='ACCEPTED')
 
     def post(self, user, route, data=None, material=None):
@@ -45,6 +46,8 @@ class BillingTests(APITestCase):
         first = self.post(self.customer, 'checkout')
         self.assertEqual(first.status_code, 201, first.data)
         self.assertEqual(first.data['total'], 40000)
+        self.assertEqual(first.data['commission_amount'], 10500)
+        self.assertEqual(first.data['provider_amount'], 29500)
         self.assertEqual(first.data['net_amount'] + first.data['vat_amount'], 40000)
         self.assertEqual(self.post(self.customer, 'checkout').data['id'], first.data['id'])
         self.assertEqual(PaymentOrder.objects.count(), 1)
@@ -114,7 +117,7 @@ class BillingTests(APITestCase):
         self.assertEqual(self.post(self.customer,'checkout').status_code,400)
         self.assertFalse(PaymentOrder.objects.exists())
 
-    def test_service_must_be_completed_and_chat_waits_for_payment(self):
+    def test_checkout_must_precede_work_and_chat_waits_for_payment(self):
         self.sr.status='IN_PROGRESS'; self.sr.save()
         self.assertEqual(self.post(self.customer,'checkout').status_code,409)
         self.assertEqual(self.post(self.customer,'service-messages',{'text':'Antes de pagar'}).status_code,403)

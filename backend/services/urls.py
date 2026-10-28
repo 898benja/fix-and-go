@@ -6,8 +6,13 @@ Incluye endpoints para solicitudes, cotizaciones, cierre (P2) y valoraciones (P2
 from django.urls import path
 
 from . import views
+from .dashboard import provider_dashboard
+from .evidence import evidence, evidence_photo
 
 urlpatterns = [
+    path('requests/<int:pk>/evidence/', evidence, name='work-evidence'),
+    path('requests/<int:pk>/evidence/<int:evidence_id>/', evidence_photo, name='work-evidence-photo'),
+    path('provider/dashboard/', provider_dashboard, name='provider-dashboard'),
     # ----- Solicitudes (BE-07, BE-08) -----
     path('requests/', views.request_list_create, name='request-list-create'),
     path('requests/<int:pk>/', views.request_detail, name='request-detail'),

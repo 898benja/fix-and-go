@@ -75,6 +75,13 @@ def cancel_request(sr):
 def advance_request(sr, expected, target):
     """Compare-and-set también para inicio y cierre; evita guardar estados viejos."""
     _change(sr.pk, [expected], target)
+    from billing.models import PaymentOrder, ServiceDispute
+    if not PaymentOrder.objects.filter(service_request=sr,status='DEMO_PAID').exists():
+        raise StateConflict('Primero se debe aprobar el pago de demostración.')
+    if ServiceDispute.objects.filter(service_request=sr,status='OPEN').exists():
+        raise StateConflict('El reclamo está en revisión; no se puede avanzar el servicio.')
+    if target=='COMPLETED' and not sr.evidence.exists():
+        raise StateConflict('El prestador debe adjuntar al menos una foto del trabajo antes de confirmar.')
     return ServiceRequest.objects.get(pk=sr.pk)
 
 

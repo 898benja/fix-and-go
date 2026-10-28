@@ -38,6 +38,7 @@ class ServiceRequestCreateSerializer(serializers.ModelSerializer):
         fields = [
             'provider_id', 'category_id', 'commune_id',
             'address', 'description', 'preferred_date', 'preferred_time',
+            'latitude', 'longitude',
         ]
 
     def validate_description(self, value):
@@ -51,6 +52,12 @@ class ServiceRequestCreateSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         """BE-07: validaciones cruzadas de negocio."""
         provider = attrs['provider']
+        from catalog.geo import validate_point
+        lat, lon = attrs.get('latitude'), attrs.get('longitude')
+        if (lat is None) != (lon is None):
+            raise serializers.ValidationError('Indica ambas coordenadas.')
+        if lat is not None:
+            validate_point(lat, lon)
         category = attrs['category']
         commune = attrs['commune']
 
@@ -166,7 +173,16 @@ class ServiceRequestDetailSerializer(ServiceRequestListSerializer):
     quote = serializers.SerializerMethodField()
 
     class Meta(ServiceRequestListSerializer.Meta):
-        fields = ServiceRequestListSerializer.Meta.fields + ['address', 'quote']
+        fields = ServiceRequestListSerializer.Meta.fields + ['address', 'quote', 'latitude', 'longitude']
+
+    latitude = serializers.SerializerMethodField()
+    longitude = serializers.SerializerMethodField()
+
+    def get_latitude(self, obj):
+        return obj.latitude if self.get_address(obj) is not None else None
+
+    def get_longitude(self, obj):
+        return obj.longitude if self.get_address(obj) is not None else None
 
     def get_address(self, obj):
         """BE-08: ocultar dirección en respuestas a terceros."""

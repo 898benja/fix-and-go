@@ -22,8 +22,10 @@ import {
   Requests,
 } from "./src/screens";
 import { Button, colors, s } from "./src/ui";
+import { ProviderHome } from "./src/provider-home";
+import { Information } from './src/information';
 const SESSION_KEY = "fixgo.session.token";
-type Tab = "explore" | "requests" | "profile";
+type Tab = "explore" | "home" | "requests" | "profile" | "information";
 type Route =
   | { kind: "new"; provider: Provider }
   | { kind: "detail"; id: number }
@@ -83,7 +85,7 @@ function MobileApp() {
         if (token) {
           const user = await api<User>("auth/me/", token);
           setSession({ token, user });
-          setTab(user.role === "CLIENT" ? "explore" : "requests");
+          setTab(user.role === "CLIENT" ? "explore" : "home");
         }
       } catch (e) {
         if (e instanceof ApiError && e.status === 401) await saveToken(null);
@@ -115,7 +117,7 @@ function MobileApp() {
   async function onSession(value: Session) {
     await saveToken(value.token);
     setSession(value);
-    setTab(value.user.role === "CLIENT" ? "explore" : "requests");
+    setTab(value.user.role === "CLIENT" ? "explore" : "home");
     setRoute(null);
   }
   const open = (id: number) => {
@@ -125,9 +127,10 @@ function MobileApp() {
   const tabs: { id: Tab; label: string; mark: string }[] = [
     ...(session?.user.role === "CLIENT"
       ? [{ id: "explore" as Tab, label: "Explorar", mark: "⌕" }]
-      : []),
+      : [{ id: "home" as Tab, label: "Inicio", mark: "⌂" }]),
     { id: "requests", label: "Solicitudes", mark: "≡" },
     { id: "profile", label: "Mi perfil", mark: "○" },
+    { id: "information", label: "Información", mark: "i" },
   ];
   return (
     <SafeAreaView style={s.page}>
@@ -256,6 +259,10 @@ function MobileApp() {
                 busy={busy}
                 onChoose={(provider) => setRoute({ kind: "new", provider })}
               />
+            ) : tab === "information" ? (
+              <Information/>
+            ) : tab === "home" ? (
+              <ProviderHome session={session} run={run} busy={busy} onOpen={open}/>
             ) : tab === "requests" ? (
               <Requests session={session} run={run} busy={busy} onOpen={open} />
             ) : (

@@ -38,7 +38,7 @@ class PaymentRead(serializers.ModelSerializer):
         return False
     class Meta:
         model = PaymentOrder
-        fields = ['id', 'mode', 'status', 'currency', 'service_amount', 'materials_amount', 'net_amount', 'vat_amount', 'vat_percent', 'total', 'snapshot', 'fiscal_document', 'created_at', 'paid_at']
+        fields = ['id', 'mode', 'status', 'currency', 'service_amount', 'materials_amount', 'net_amount', 'vat_amount', 'vat_percent', 'total', 'snapshot', 'fiscal_document', 'created_at', 'paid_at', 'refunded_at', 'commission_percent', 'commission_amount', 'provider_amount']
 
 class MessageRead(serializers.ModelSerializer):
     class Meta:

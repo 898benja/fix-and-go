@@ -22,6 +22,19 @@ class ProviderListSerializer(serializers.ModelSerializer):
     """Prestador en listado de búsqueda (sin datos privados)."""
 
     phone = serializers.SerializerMethodField()
+    latitude = serializers.SerializerMethodField()
+    longitude = serializers.SerializerMethodField()
+    distance_km = serializers.SerializerMethodField()
+
+    def get_latitude(self, obj):
+        return obj.latitude if obj.map_visible else None
+
+    def get_longitude(self, obj):
+        return obj.longitude if obj.map_visible else None
+
+    def get_distance_km(self, obj):
+        value = getattr(obj, 'distance_km', None)
+        return round(value, 2) if value is not None else None
 
     def get_phone(self, obj):
         return ''
@@ -36,6 +49,7 @@ class ProviderListSerializer(serializers.ModelSerializer):
             'id', 'user_id', 'display_name', 'description',
             'years_experience', 'phone', 'categories', 'communes',
             'is_active', 'is_verified',
+            'latitude', 'longitude', 'map_visible', 'distance_km',
         ]
         read_only_fields = fields
 

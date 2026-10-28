@@ -13,6 +13,11 @@ export type User = {
 export type Session = { token: string; user: User };
 export type Option = { id: number; name: string; slug: string };
 export type Provider = {
+  latitude: number | null;
+  longitude: number | null;
+  map_visible: boolean;
+  distance_km?: number | null;
+  requested_point?: { latitude: number; longitude: number };
   id: number;
   user_id: number;
   display_name: string;
