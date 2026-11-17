@@ -62,7 +62,7 @@ def provider_list(request):
     BE-12: orden estable por defecto (display_name), paginación aplicada.
     """
     qs = ProviderProfile.objects.filter(
-        is_active=True, user__is_active=True,
+        is_active=True, verification_status='APPROVED', user__is_active=True,
     ).select_related('user').prefetch_related('categories', 'communes')
 
     # Filtro por categoría (slug)
@@ -125,7 +125,7 @@ def provider_detail(request, pk):
     try:
         profile = ProviderProfile.objects.select_related('user').prefetch_related(
             'categories', 'communes',
-        ).annotate(avg_rating=Avg('user__provider_requests__rating__score'),rating_count=Count('user__provider_requests__rating',distinct=True)).get(pk=pk, is_active=True, user__is_active=True)
+        ).annotate(avg_rating=Avg('user__provider_requests__rating__score'),rating_count=Count('user__provider_requests__rating',distinct=True)).get(pk=pk, is_active=True, verification_status='APPROVED', user__is_active=True)
     except ProviderProfile.DoesNotExist:
         return Response(
             {'code': 'not_found', 'detail': 'Prestador no encontrado.'},

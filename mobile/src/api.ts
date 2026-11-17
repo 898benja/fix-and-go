@@ -23,6 +23,7 @@ export type User = {
 export type Session = { token: string; user: User };
 export type Option = { id: number; name: string; slug: string };
 export type Provider = {
+  verification_status?: 'DRAFT'|'PENDING'|'APPROVED'|'REJECTED';
   avatar?: string;
   avg_rating?: number | null;
   rating_count?: number;

@@ -19,6 +19,7 @@ import { DemoWallet } from './wallet';
 import { EvidencePanel } from './evidence';
 import { DisputePanel } from './dispute';
 import { ProfilePhoto } from './profile-photo';
+import { ProviderVerification } from './provider-verification';
 import { serviceProgress } from './service-progress';
 import { useRefresh } from './use-refresh';
 export { Explore } from './explore-map';
@@ -105,11 +106,10 @@ export function Access({
             <Chips items={areas} selected={commune ? [commune] : []} onSelect={v => setCommune(v === commune ? null : v)} />
             <Text style={s.body}>Puedes completar estos datos ahora o guardarlos después en Mi perfil.</Text>
             {role === "PROVIDER" && (
-              <Field
-                label="Nombre de tu servicio"
-                value={display}
-                onChangeText={setDisplay}
-              />
+              <>
+                <Field label="Nombre de tu servicio" value={display} onChangeText={setDisplay}/>
+                <Text style={s.body}>Tras crear tu cuenta, completa RUT, oficio, experiencia, CV y foto en Tu perfil. Administración revisará la postulación antes de publicar tus servicios.</Text>
+              </>
             )}
           </>
         )}
@@ -796,10 +796,11 @@ export function Profile({
             }
           />
           {saved && (
-            <Notice tone="success" title="Perfil guardado" message="Tus cambios ya están disponibles para los clientes."/>
+            <Notice tone="success" title="Perfil guardado" message={profile.verification_status==='APPROVED'?'Tus cambios ya están disponibles para los clientes.':'Tus cambios están guardados. El perfil será visible tras la aprobación.'}/>
           )}
         </Card>
       )}
+      {profile && <ProviderVerification session={session} run={run} busy={busy}/>}
       {session.user.role === 'CLIENT' && <DemoWallet session={session} run={run} busy={busy}/>}
       <Button
         secondary

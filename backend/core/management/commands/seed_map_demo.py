@@ -34,6 +34,6 @@ class Command(BaseCommand):
             user.set_unusable_password();user.save(update_fields=['password'])
             p=ProviderProfile.objects.create(user=user,display_name=name,
                 description=description,
-                latitude=lat,longitude=lon,map_visible=True)
+                latitude=lat,longitude=lon,map_visible=True,verification_status='APPROVED')
             p.categories.add(category);p.communes.set(Commune.objects.all())
         self.stdout.write(self.style.SUCCESS('Perfiles de mapa DEMO disponibles.'))

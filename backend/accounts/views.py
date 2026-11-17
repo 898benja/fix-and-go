@@ -26,6 +26,8 @@ from .serializers import (
     RegisterSerializer,
     UserSerializer,
 )
+from .verification import VerificationInput, save_verification
+from rest_framework.exceptions import ValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -170,3 +172,30 @@ def provider_profile_view(request):
     )
 
     return Response(ProviderProfileReadSerializer(profile).data)
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def provider_verification(request):
+    """El postulante presenta antecedentes; la aprobación queda solo en admin."""
+    if request.user.role != User.Role.PROVIDER:
+        return Response({'detail':'Solo los prestadores pueden solicitar revisión.'}, status=403)
+    profile = request.user.provider_profile
+    profile.refresh_from_db()
+    if request.method == 'GET':
+        return Response({'status':profile.verification_status,'profession':profile.profession,
+                         'professional_background':profile.professional_background,
+                         'has_cv':bool(profile.cv),'has_photo':bool(profile.avatar),
+                         'note':profile.verification_note if profile.verification_status=='REJECTED' else ''})
+    if profile.verification_status == 'APPROVED':
+        raise ValidationError('Tu perfil ya está aprobado. Contacta a administración para actualizar documentos.')
+    serializer = VerificationInput(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    if not profile.avatar:
+        raise ValidationError('Agrega una foto de perfil antes de solicitar la revisión.')
+    from django.db import IntegrityError
+    try:
+        save_verification(profile, serializer.validated_data)
+    except IntegrityError:
+        raise ValidationError({'rut':'Este RUT ya está registrado en otra postulación.'})
+    return Response({'status':'PENDING','detail':'Recibimos tus antecedentes. Revisaremos tu postulación.'})

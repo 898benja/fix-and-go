@@ -6,6 +6,10 @@ Bloqueo de ediciones peligrosas (rol y contraseña no editables directamente).
 
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
+from django.http import FileResponse, Http404
+from django.urls import path, reverse
+from django.utils import timezone
+from django.utils.html import format_html
 
 from .models import ProviderProfile, User
 
@@ -48,14 +52,50 @@ class ProviderProfileAdmin(admin.ModelAdmin):
     """
 
     list_display = [
-        'display_name', 'user', 'is_active', 'is_verified',
+        'display_name', 'user', 'verification_status', 'is_active', 'is_verified',
         'years_experience', 'phone', 'get_categories', 'get_communes',
     ]
-    list_filter = ['is_active', 'is_verified', 'categories', 'communes']
+    list_filter = ['verification_status', 'is_active', 'is_verified', 'categories', 'communes']
     search_fields = ['display_name', 'user__email', 'user__first_name', 'user__last_name']
     filter_horizontal = ['categories', 'communes']
     raw_id_fields = ['user']
     list_per_page = 25
+    readonly_fields = ['rut', 'profession', 'professional_background', 'cv_download', 'reviewed_at', 'verification_status', 'is_verified']
+    exclude = ['cv']
+    actions = ['approve_profiles', 'reject_profiles']
+
+    def get_urls(self):
+        return [path('<int:profile_id>/cv/', self.admin_site.admin_view(self.download_cv), name='provider-cv-download')] + super().get_urls()
+
+    @admin.display(description='CV privado')
+    def cv_download(self, obj):
+        if not obj or not obj.cv:
+            return 'Sin CV'
+        return format_html('<a href="{}">Descargar CV</a>', reverse('admin:provider-cv-download', args=[obj.pk]))
+
+    def download_cv(self, request, profile_id):
+        obj = self.get_object(request, str(profile_id))
+        if not obj or not obj.cv or not self.has_view_permission(request, obj):
+            raise Http404
+        return FileResponse(obj.cv.open('rb'), as_attachment=True, filename='cv-prestador.pdf', content_type='application/pdf')
+
+    @admin.action(description='Aprobar postulaciones completas')
+    def approve_profiles(self, request, queryset):
+        count = 0
+        for profile in queryset:
+            if profile.verification_status == 'PENDING' and all([profile.rut, profile.profession, profile.professional_background, profile.cv, profile.avatar]):
+                profile.verification_status = 'APPROVED'
+                profile.is_verified = True
+                profile.is_active = True
+                profile.reviewed_at = timezone.now()
+                profile.save(update_fields=['verification_status','is_verified','is_active','reviewed_at'])
+                count += 1
+        self.message_user(request, f'{count} postulaciones aprobadas tras revisión administrativa.')
+
+    @admin.action(description='Rechazar postulaciones seleccionadas')
+    def reject_profiles(self, request, queryset):
+        count = queryset.filter(verification_status='PENDING').update(verification_status='REJECTED', is_verified=False, is_active=False, reviewed_at=timezone.now())
+        self.message_user(request, f'{count} postulaciones rechazadas. Agrega una observación interna para orientar la nueva presentación.')
 
     @admin.display(description='Categorías')
     def get_categories(self, obj):

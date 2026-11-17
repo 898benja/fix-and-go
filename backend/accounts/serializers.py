@@ -94,7 +94,7 @@ class RegisterSerializer(serializers.Serializer):
 
         # Crear perfil de prestador automáticamente (BD-02)
         if role == User.Role.PROVIDER:
-            ProviderProfile.objects.create(user=user, display_name=display_name)
+            ProviderProfile.objects.create(user=user, display_name=display_name, is_active=False)
 
         token = Token.objects.create(user=user)
         return user, token
@@ -157,7 +157,7 @@ class ProviderProfileReadSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'user_id', 'display_name', 'description',
             'years_experience', 'phone', 'categories', 'communes',
-            'is_active', 'is_verified',
+            'is_active', 'is_verified', 'verification_status', 'profession',
             'latitude', 'longitude', 'map_visible', 'avatar',
         ]
         read_only_fields = fields

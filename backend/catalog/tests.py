@@ -27,6 +27,7 @@ class CatalogTests(APITestCase):
             display_name='Prestador de prueba',
             description='Especialista para las pruebas de catálogo.',
             is_active=True,
+            verification_status='APPROVED',
         )
         self.profile.categories.add(self.category)
         self.profile.communes.add(self.commune)

@@ -75,9 +75,9 @@ class ServiceRequestCreateSerializer(serializers.ModelSerializer):
                 {'provider_id': 'El prestador no tiene un perfil configurado.'}
             )
 
-        if not profile.is_active:
+        if not profile.is_active or profile.verification_status != 'APPROVED':
             raise serializers.ValidationError(
-                {'provider_id': 'El prestador no está activo actualmente.'}
+                {'provider_id': 'El prestador aún no está aprobado para recibir trabajos.'}
             )
 
         # Verificar que el prestador ofrece la categoría solicitada

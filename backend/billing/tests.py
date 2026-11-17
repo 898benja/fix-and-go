@@ -15,7 +15,7 @@ class BillingTests(APITestCase):
         self.provider = User.objects.create_user(username='billing-provider', email='billing-provider@example.test', role='PROVIDER')
         self.other = User.objects.create_user(username='billing-other', email='billing-other@example.test')
         self.category, self.commune = Category.objects.first(), Commune.objects.first()
-        self.profile = ProviderProfile.objects.create(user=self.provider, display_name='Prestador prueba', phone='+56912345678')
+        self.profile = ProviderProfile.objects.create(user=self.provider, display_name='Prestador prueba', phone='+56912345678', verification_status='APPROVED')
         self.profile.categories.add(self.category)
         self.profile.communes.add(self.commune)
         self.sr = ServiceRequest.objects.create(client=self.customer, provider=self.provider, category=self.category, commune=self.commune, description='Servicio de prueba', status='ACCEPTED')

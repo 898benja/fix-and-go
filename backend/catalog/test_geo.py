@@ -13,7 +13,7 @@ class NearbyTests(APITestCase):
         cls.profiles = []
         for i,lat in enumerate([-33.449, -33.47, -33.75]):
             user=User.objects.create_user(username=f'map-{i}',email=f'map-{i}@example.test',role='PROVIDER')
-            p=ProviderProfile.objects.create(user=user,display_name=f'Provider {i}',latitude=lat,longitude=-70.6693,map_visible=True)
+            p=ProviderProfile.objects.create(user=user,display_name=f'Provider {i}',latitude=lat,longitude=-70.6693,map_visible=True,verification_status='APPROVED')
             p.categories.add(cls.category);p.communes.add(cls.commune)
             cls.profiles.append(p)
 

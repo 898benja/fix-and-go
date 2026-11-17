@@ -4,6 +4,7 @@ from . import views
 from .avatar import avatar
 
 urlpatterns = [
+    path('me/provider-profile/verification/', views.provider_verification, name='provider-verification'),
     path('me/provider-profile/avatar/', avatar, name='provider-avatar'),
     path('register/', views.register_view, name='register'),
     path('login/', views.login_view, name='login'),

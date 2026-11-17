@@ -15,7 +15,7 @@ class RequestWorkflowTests(APITestCase):
         self.outsider = User.objects.create_user(username='outsider', email='outsider@example.test')
         self.category = Category.objects.first()
         self.commune = Commune.objects.first()
-        self.profile = ProviderProfile.objects.create(user=self.provider, display_name='Demo')
+        self.profile = ProviderProfile.objects.create(user=self.provider, display_name='Demo', verification_status='APPROVED')
         self.profile.categories.add(self.category)
         self.profile.communes.add(self.commune)
         self.sr = ServiceRequest.objects.create(

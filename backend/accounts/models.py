@@ -105,6 +105,13 @@ class ProviderProfile(models.Model):
         'verificación simulada', default=False,
         help_text='Dato demostrativo. FIX&GO no verificó realmente credenciales profesionales.',
     )
+    rut = models.CharField('RUT privado', max_length=12, blank=True)
+    profession = models.CharField('oficio o profesión', max_length=120, blank=True)
+    professional_background = models.TextField('experiencia y formación', blank=True)
+    cv = models.FileField('CV privado', upload_to='provider_cv/', blank=True)
+    verification_status = models.CharField('revisión', max_length=12, choices=[('DRAFT','Incompleta'),('PENDING','Pendiente'),('APPROVED','Aprobada'),('REJECTED','Rechazada')], default='DRAFT')
+    verification_note = models.CharField('observación interna', max_length=500, blank=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         verbose_name = 'perfil de prestador'
@@ -116,6 +123,7 @@ class ProviderProfile(models.Model):
             models.Index(fields=['map_visible', 'latitude', 'longitude'], name='idx_provider_map'),
         ]
         constraints = [
+            models.UniqueConstraint(fields=['rut'], condition=~models.Q(rut=''), name='unique_provider_rut'),
             models.CheckConstraint(
                 condition=(models.Q(latitude__isnull=True, longitude__isnull=True)
                            | models.Q(latitude__isnull=False, longitude__isnull=False,

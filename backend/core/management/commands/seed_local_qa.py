@@ -23,7 +23,7 @@ class Command(BaseCommand):
                 user.set_password(password);user.save(update_fields=['password'])
                 lines.append(f'{role}\nCorreo: {email}\nContraseña: {password}\n')
             if created and role == 'PROVIDER':
-                profile = ProviderProfile.objects.create(user=user, display_name='Tomás Herrera · Servicios del hogar', description='Reparaciones de grifería y mantención del hogar. Atención coordinada en Santiago.', years_experience=5, latitude=-33.4489, longitude=-70.6693, map_visible=True)
+                profile = ProviderProfile.objects.create(user=user, display_name='Tomás Herrera · Servicios del hogar', description='Reparaciones de grifería y mantención del hogar. Atención coordinada en Santiago.', years_experience=5, latitude=-33.4489, longitude=-70.6693, map_visible=True, verification_status='APPROVED')
                 profile.categories.set(Category.objects.filter(slug='agua-gasfiteria'))
                 profile.communes.set(Commune.objects.all())
         if lines:

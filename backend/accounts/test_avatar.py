@@ -11,7 +11,7 @@ class PublicProfileTests(APITestCase):
     def test_avatar_and_real_rating_average(self):
         provider=User.objects.create_user(username='portrait-p',email='portrait-p@example.test',role='PROVIDER')
         customer=User.objects.create_user(username='portrait-c',email='portrait-c@example.test')
-        profile=ProviderProfile.objects.create(user=provider,display_name='Perfil QA')
+        profile=ProviderProfile.objects.create(user=provider,display_name='Perfil QA',verification_status='APPROVED')
         self.client.force_authenticate(customer)
         url='/api/v1/auth/me/provider-profile/avatar/'
         self.assertEqual(self.client.post(url,{},format='json').status_code,403)
