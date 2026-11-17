@@ -1,3 +1,4 @@
+import { pdfBase64 } from './pdf-base64';
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Image, Modal, Platform, Text, View } from "react-native";
 import * as ImagePicker from 'expo-image-picker';
@@ -122,7 +123,7 @@ export function Access({
                 <Field label="Formación y experiencia" multiline value={professionalBackground} onChangeText={setProfessionalBackground} placeholder="Cuéntanos tus estudios, certificaciones y experiencia"/>
                 <Button secondary label={avatar?'Cambiar foto de perfil':'Agregar foto de perfil'} busy={busy} onPress={()=>void run(async()=>{const result=await ImagePicker.launchImageLibraryAsync({mediaTypes:['images'],base64:true,quality:0.6,allowsEditing:true,aspect:[1,1]});if(result.canceled)return;const image=result.assets[0]?.base64;if(!image||image.length>2800000)throw new Error('Elige una foto de hasta 2 MB.');setAvatar(image);})}/>
                 {!!avatar&&<Image source={{uri:`data:image/jpeg;base64,${avatar}`}} style={{width:88,height:88,borderRadius:44}} accessibilityLabel="Tu foto de perfil"/>}
-                <Button secondary label={cvName||'Adjuntar CV en PDF · máximo 3 MB'} busy={busy} onPress={()=>void run(async()=>{const result=await DocumentPicker.getDocumentAsync({type:'application/pdf',copyToCacheDirectory:true});if(result.canceled)return;const asset=result.assets[0];if(asset.size&&asset.size>3*1024*1024)throw new Error('El CV debe pesar menos de 3 MB.');const content=Platform.OS==='web'?asset.base64:await new File(asset.uri).base64();if(!content||content.length>4200000)throw new Error('Elige un PDF de hasta 3 MB.');setCv(content);setCvName(asset.name);})}/>
+                <Button secondary label={cvName||'Adjuntar CV en PDF · máximo 3 MB'} busy={busy} onPress={()=>void run(async()=>{const result=await DocumentPicker.getDocumentAsync({type:'application/pdf',copyToCacheDirectory:true,base64:true});if(result.canceled)return;const asset=result.assets[0];if(asset.size&&asset.size>3*1024*1024)throw new Error('El CV debe pesar menos de 3 MB.');const content=pdfBase64(Platform.OS==='web'?asset.base64:await new File(asset.uri).base64());if(!content||content.length>4200000)throw new Error('Elige un PDF de hasta 3 MB.');setCv(content);setCvName(asset.name);})}/>
                 <Text style={s.body}>El RUT y el CV solo los revisa administración. Tu foto, oficio y descripción serán visibles tras la aprobación. Usaremos tu correo para informarte el resultado.</Text>
                 <Button secondary label={privacyAcknowledged?'✓ Acepto el uso de mis datos para la revisión':'Acepto el uso de mis datos para revisar mi postulación'} onPress={()=>setPrivacyAcknowledged(!privacyAcknowledged)}/>
               </>
