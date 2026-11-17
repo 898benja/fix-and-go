@@ -10,7 +10,7 @@ const js = ts.transpileModule(source, {
     target: ts.ScriptTarget.ES2022,
   },
 }).outputText;
-const { api, options, checkHealth, ApiError } = await import(
+const { api, options, checkHealth, ApiError, onSessionExpired } = await import(
   `data:text/javascript;base64,${Buffer.from(js).toString("base64")}`
 );
 const originalFetch = global.fetch;
@@ -48,7 +48,11 @@ test("conserva el código 401 para cerrar sesión", async () => {
 test("expone errores de validación por campo", async () => {
   global.fetch = async () =>
     json({ detail: { description: ["Mínimo 10 caracteres."] } }, 400);
-  await assert.rejects(api("requests/"), /description: Mínimo 10 caracteres/);
+  await assert.rejects(api("requests/"), /Descripción: Mínimo 10 caracteres/);
+});
+test("presenta credenciales inválidas sin detalles técnicos", async () => {
+  global.fetch = async () => json({detail:"[ErrorDetail(string='Credenciales inválidas.', code='invalid')]"}, 400);
+  await assert.rejects(api("auth/login/"), (e) => e.message === "Credenciales inválidas.");
 });
 test("respuesta HTML no se interpreta como JSON válido", async () => {
   global.fetch = async () =>
@@ -80,4 +84,38 @@ test("health valida identidad del servidor", async () => {
   global.fetch = async () =>
     json({ status: "ok", database: "ok", service: "different" });
   await assert.rejects(checkHealth(), /no está disponible/);
+});
+test("no pierde errores de campo cuando hay un error general", async () => {
+  global.fetch = async () => json({detail:"Revisa el formulario.",field_errors:{email:["Correo inválido."]}},400);
+  await assert.rejects(api("auth/register/"), e => /Revisa el formulario/.test(e.message) && /Correo electrónico: Correo inválido/.test(e.message));
+});
+test("no muestra HTML ni trazas del servidor", async () => {
+  global.fetch = async () => json({detail:"Traceback private.py"},400);
+  await assert.rejects(api("requests/"), e => !/Traceback|private.py/.test(e.message));
+});
+test("un reclamo inexistente puede responder JSON null", async () => {
+  global.fetch = async () => json(null);
+  assert.equal(await api("requests/1/dispute/"),null);
+});
+test("una respuesta vacía 204 es válida", async () => {
+  global.fetch = async () => new Response(null,{status:204});
+  assert.equal(await api("wallet/demo-card/", "token", "DELETE"),null);
+});
+test("un error HTML 503 muestra disponibilidad sin detalles técnicos", async () => {
+  global.fetch = async () => new Response('<html>private</html>',{status:503});
+  await assert.rejects(api("requests/"),/no está disponible por el momento/);
+});
+test("una respuesta JSON malformada no pasa por una respuesta válida", async () => {
+  global.fetch = async () => new Response('{broken',{status:200});
+  await assert.rejects(api("requests/"), /No pudimos leer/);
+});
+
+test("un 401 de actualización notifica solo el token afectado y permite desuscribir", async () => {
+  const tokens = [];
+  const unsubscribe = onSessionExpired(token => tokens.push(token));
+  global.fetch = async () => json({detail:"Token vencido"},401);
+  await assert.rejects(api("provider/dashboard/", "expired-token"));
+  unsubscribe();
+  await assert.rejects(api("provider/dashboard/", "another-token"));
+  assert.deepEqual(tokens,["expired-token"]);
 });

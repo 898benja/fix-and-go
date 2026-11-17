@@ -1,17 +1,17 @@
 """Billetera exclusivamente demostrativa, sin entrada de PAN ni CVV."""
-from django.conf import settings
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 from accounts.permissions import IsClient
 from .models import DemoCard
 from .serializers import StrictInput
+from .workflow import demo_available
 
 
 @api_view(['GET', 'POST', 'DELETE'])
 @permission_classes([IsClient])
 def demo_card(request):
-    if not (settings.DEBUG and settings.PAYMENTS_DEMO_ENABLED):
+    if not demo_available():
         raise PermissionDenied('La billetera de demostración está deshabilitada.')
     if request.method in ('POST', 'DELETE'):
         data = StrictInput(data=request.data)

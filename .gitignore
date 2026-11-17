@@ -31,3 +31,6 @@ dist/
 web-build/
 coverage/
 *.log
+
+# Credenciales y estado de la demo local
+.local/

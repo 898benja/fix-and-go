@@ -1,5 +1,4 @@
 """Endpoints del flujo final. Ninguna respuesta representa un cobro bancario real."""
-from django.conf import settings
 from django.db import transaction
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
@@ -43,11 +42,11 @@ def summary(request, pk):
     sr = workflow.owned(pk, request.user)
     order = PaymentOrder.objects.filter(service_request=sr).first()
     if order:
-        return Response({**PaymentRead(order).data, 'webpay_enabled': enabled(), 'demo_enabled': settings.DEBUG and settings.PAYMENTS_DEMO_ENABLED})
+        return Response({**PaymentRead(order).data, 'webpay_enabled': enabled(), 'demo_enabled': workflow.demo_available()})
     values, pending = workflow.amounts(sr)
     return Response({**values, 'currency': 'CLP', 'mode': 'DEMO', 'status': 'DRAFT',
                      'has_pending_materials': pending, 'fiscal_document': False, 'webpay_enabled': enabled(),
-                     'demo_enabled': settings.DEBUG and settings.PAYMENTS_DEMO_ENABLED})
+                     'demo_enabled': workflow.demo_available()})
 
 
 @api_view(['POST'])

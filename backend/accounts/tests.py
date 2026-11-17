@@ -70,9 +70,11 @@ class IdentityTests(APITestCase):
         self.register()
         for active, password in [(True, 'wrong'), (False, self.payload()['password'])]:
             User.objects.update(is_active=active)
-            self.assertEqual(self.client.post(reverse('login'), {
+            response = self.client.post(reverse('login'), {
                 'email': self.payload()['email'], 'password': password,
-            }).status_code, 400)
+            })
+            self.assertEqual(response.status_code, 400)
+            self.assertNotIn('ErrorDetail', str(response.json()))
 
     def test_anonymous_and_invalid_token(self):
         self.assertEqual(self.client.get(reverse('me')).status_code, 401)

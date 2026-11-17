@@ -8,7 +8,7 @@ BE-17 (cierre), BE-18 (valoración).
 import logging
 
 from django.db import transaction
-from rest_framework import status
+from rest_framework import status, serializers
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -171,13 +171,31 @@ def request_list_create(request):
     return paginate_queryset(request, qs, ServiceRequestListSerializer)
 
 
-@api_view(['GET'])
+@api_view(['GET', 'PATCH'])
 @permission_classes([IsAuthenticated])
 def request_detail(request, pk):
     """Detalle de una solicitud."""
     sr = _get_request_or_404(pk, request.user)
     if sr is None:
         return _not_found()
+    if request.method == 'PATCH':
+        if request.user.id != sr.client_id:
+            return _forbidden('Solo el cliente puede ajustar la fecha.')
+        if sr.status != ServiceRequest.Status.PENDING:
+            return _conflict('La fecha se puede ajustar antes de recibir la cotización.')
+        class DateInput(serializers.Serializer):
+            preferred_date = serializers.DateField(required=True)
+            preferred_time = serializers.ChoiceField(choices=['Mañana', 'Tarde', 'Noche'], required=True)
+            def validate_preferred_date(self, value):
+                from django.utils import timezone
+                if value < timezone.localdate():
+                    raise serializers.ValidationError('Elige una fecha de hoy en adelante.')
+                return value
+        data = DateInput(data=request.data)
+        data.is_valid(raise_exception=True)
+        sr.preferred_date = data.validated_data['preferred_date']
+        sr.preferred_time = data.validated_data['preferred_time']
+        sr.save(update_fields=['preferred_date', 'preferred_time', 'updated_at'])
     return Response(
         ServiceRequestDetailSerializer(sr, context={'request': request}).data,
     )

@@ -7,9 +7,11 @@ from django.urls import path
 
 from . import views
 from .dashboard import provider_dashboard
-from .evidence import evidence, evidence_photo
+from .evidence import evidence, evidence_photo, request_photos, request_photo
 
 urlpatterns = [
+    path('requests/<int:pk>/photos/', request_photos, name='request-photos'),
+    path('requests/<int:pk>/photos/<int:photo_id>/', request_photo, name='request-photo'),
     path('requests/<int:pk>/evidence/', evidence, name='work-evidence'),
     path('requests/<int:pk>/evidence/<int:evidence_id>/', evidence_photo, name='work-evidence-photo'),
     path('provider/dashboard/', provider_dashboard, name='provider-dashboard'),

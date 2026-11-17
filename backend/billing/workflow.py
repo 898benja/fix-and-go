@@ -33,8 +33,12 @@ def owned(pk, user, client=False, provider=False, lock=False):
     return sr
 
 
+def demo_available():
+    return settings.PAYMENTS_DEMO_ENABLED and (settings.DEBUG or settings.PUBLIC_DEMO_ENABLED)
+
+
 def require_demo():
-    if not (settings.DEBUG and settings.PAYMENTS_DEMO_ENABLED):
+    if not demo_available():
         raise PermissionDenied('Pago de demostración deshabilitado. No hay pasarela real configurada.')
 
 

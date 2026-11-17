@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Modal, Text, View } from "react-native";
+import { ActivityIndicator, Image, Modal, Text, View } from "react-native";
+import * as ImagePicker from 'expo-image-picker';
 import {
   api,
   options,
@@ -11,7 +12,7 @@ import {
   Session,
   User,
 } from "./api";
-import { Button, Card, Chips, colors, Field, s } from "./ui";
+import { Button, Card, Chips, Notice, colors, Field, s } from "./ui";
 import { BillingPanel, loadBilling, BillingData } from "./billing";
 import ServiceMap from './ServiceMap';
 import { DemoWallet } from './wallet';
@@ -64,7 +65,7 @@ export function Access({
           Encuentra servicios para tu hogar y sigue cada paso desde tu celular.
         </Text>
         <Text style={{ color: colors.yellow, fontSize: 12 }}>
-          SANTIAGO · MVP ACADÉMICO
+          SERVICIOS PARA TU HOGAR · SANTIAGO
         </Text>
       </View>
       <Card>
@@ -193,6 +194,16 @@ export function NewRequest({
   const [commune, setCommune] = useState(provider.communes.find(c => c.id === session.user.default_commune)?.id ?? provider.communes[0]?.id ?? 0);
   const [description, setDescription] = useState("");
   const [address, setAddress] = useState(session.user.default_address ?? "");
+  const [preferredDate, setPreferredDate] = useState('');
+  const [preferredTime, setPreferredTime] = useState('');
+  const [requestPhotos, setRequestPhotos] = useState<string[]>([]);
+  async function addPhoto() {
+    const result = await ImagePicker.launchImageLibraryAsync({mediaTypes:['images'], base64:true, quality:0.6, allowsEditing:true});
+    if (result.canceled) return;
+    const image = result.assets[0]?.base64;
+    if (!image || image.length > 2800000) throw new Error('Elige una foto de hasta 2 MB.');
+    setRequestPhotos(current => [...current, image]);
+  }
   return (
     <>
       <Text style={s.heading}>Cuéntanos qué necesitas</Text>
@@ -223,6 +234,12 @@ export function NewRequest({
           value={address}
           onChangeText={setAddress}
         />
+        <Field label="Fecha preferida (AAAA-MM-DD)" value={preferredDate} onChangeText={setPreferredDate} placeholder="2026-11-20" keyboardType="numbers-and-punctuation" />
+        <Text style={s.label}>Horario preferido</Text>
+        <Chips items={[{id:1,name:'Mañana'},{id:2,name:'Tarde'},{id:3,name:'Noche'}]} selected={preferredTime ? [{'Mañana':1,'Tarde':2,'Noche':3}[preferredTime] ?? 0] : []} onSelect={id=>setPreferredTime(({1:'Mañana',2:'Tarde',3:'Noche'} as Record<number,string>)[id])}/>
+        <Button secondary label={`Agregar foto del problema (${requestPhotos.length}/5)`} busy={busy} disabled={requestPhotos.length>=5} onPress={()=>void run(addPhoto)}/>
+        {requestPhotos.map((photo,index)=><Image key={index} source={{uri:`data:image/jpeg;base64,${photo}`}} style={{width:80,height:80,borderRadius:10}} accessibilityLabel={`Foto ${index+1} del problema`}/>)}
+        {requestPhotos.length>0&&<Button secondary label="Quitar última foto" onPress={()=>setRequestPhotos(current=>current.slice(0,-1))}/>}
         <Text style={s.body}>
           La dirección se comparte con el prestador asignado después del pago. No incluyas teléfonos ni correos en la descripción. Enviar esta
           solicitud no confirma un precio ni realiza un pago.
@@ -230,7 +247,7 @@ export function NewRequest({
         <Button
           label="Solicitar cotización"
           busy={busy}
-          disabled={!category || !commune || description.trim().length < 10}
+          disabled={!category || !commune || description.trim().length < 10 || (preferredDate !== '' && !/^\d{4}-\d{2}-\d{2}$/.test(preferredDate))}
           onPress={() =>
             void run(async () => {
               // La API pide el ID del usuario, no el ID del perfil del prestador.
@@ -245,8 +262,12 @@ export function NewRequest({
                   commune_id: commune,
                   description: description.trim(),
                   address: address.trim(),
+                  ...(preferredDate ? {preferred_date:preferredDate,preferred_time:preferredTime} : {}),
                 },
               );
+              for (const photo of requestPhotos) {
+                await api(`requests/${result.id}/photos/`,session.token,'POST',{image_base64:photo});
+              }
               onCreated(result.id);
             })
           }
@@ -269,6 +290,7 @@ export function Requests({
 }) {
   const [page, setPage] = useState<Page<RequestItem> | null>(null);
   const [number, setNumber] = useState(1);
+  const refreshError = useRefresh(async () => setPage(await api<Page<RequestItem>>(`requests/?page=${number}`, session.token)), !!page, busy);
   const load = (n = 1) =>
     run(async () => {
       setPage(
@@ -291,6 +313,7 @@ export function Requests({
           ? "Cotizaciones, avances y próximos pasos."
           : "Responde a tus clientes y gestiona cada servicio."}
       </Text>
+      {!!refreshError && <Notice tone="warning" title="Actualización pendiente" message={refreshError}/>}
       <Button
         secondary
         label="Actualizar solicitudes"
@@ -368,9 +391,14 @@ export function Detail({
   const [price, setPrice] = useState("");
   const [score, setScore] = useState(5);
   const [comment, setComment] = useState("");
+  const [changeDate, setChangeDate] = useState('');
+  const [changeTime, setChangeTime] = useState('Mañana');
+  const [problemPhotos, setProblemPhotos] = useState<{id:number}[]>([]);
+  const [openedPhotos, setOpenedPhotos] = useState<Record<number,string>>({});
   const refresh = async () => {
     const value = await api<RequestItem>(`requests/${id}/`, session.token);
     setItem(value);
+    setProblemPhotos(await api<{id:number}[]>(`requests/${id}/photos/`,session.token));
     if (["ACCEPTED", "IN_PROGRESS", "COMPLETED"].includes(value.status)) {
       setBilling(await loadBilling(id, session.token));
     } else setBilling(null);
@@ -421,29 +449,38 @@ export function Detail({
         <Text style={s.badge}>{item.status === 'CANCELLED' ? 'Solicitud cerrada' : `Paso ${serviceProgress(item.status, billing?.bill.status, client).step} de 5`}</Text>
         <Text style={s.title}>{serviceProgress(item.status, billing?.bill.status, client).title}</Text>
         <Text style={s.body}>{serviceProgress(item.status, billing?.bill.status, client).detail}</Text>
-        {!!refreshError && <Text accessibilityRole="alert" style={s.body}>{refreshError}</Text>}
+        {!!refreshError && <Notice tone="warning" title="Actualización pendiente" message={refreshError}/>}
       </Card>
       {pendingAction && (
         <Modal
           transparent
           animationType="fade"
-          onRequestClose={() => setPendingAction(null)}
+          onRequestClose={() => { if (!busy) setPendingAction(null); }}
         >
           <View
             style={{
               flex: 1,
               justifyContent: "center",
+              alignItems: "center",
               padding: 24,
               backgroundColor: "rgba(18,47,58,0.6)",
             }}
           >
-            <Card>
+            <Card compact>
               <Text style={s.title}>{pendingAction.title}</Text>
               <Text style={s.body}>
-                Esta decisión actualizará el estado del servicio.
+                {{
+                  "quote/accept": "Aceptarás el precio y trabajo descritos. Revisarás los materiales antes de pagar.",
+                  "quote/reject": "Esta propuesta quedará rechazada. El prestador podrá enviar una nueva cotización.",
+                  "quote/withdraw": "El cliente ya no podrá aceptar esta propuesta. Podrás enviar una nueva.",
+                  cancel: "Cerrarás esta solicitud. Si cambias de opinión, tendrás que crear una nueva.",
+                  start: "El servicio pasará a estar en curso. Recuerda adjuntar fotos del resultado.",
+                  complete: "Confirma solo si revisaste el trabajo y las fotografías. El servicio quedará terminado y podrás valorarlo.",
+                }[pendingAction.route]}
               </Text>
               <Button
-                label="Confirmar"
+                label={pendingAction.route === "cancel" ? "Sí, cancelar solicitud" : pendingAction.route === "complete" ? "Sí, el trabajo está terminado" : "Confirmar decisión"}
+                destructive={["cancel", "quote/reject", "quote/withdraw"].includes(pendingAction.route)}
                 busy={busy}
                 onPress={() => {
                   const target = pendingAction.route;
@@ -471,11 +508,23 @@ export function Detail({
         <Text style={s.badge}>{item.status_display}</Text>
         <Text style={s.title}>{item.category_name}</Text>
         <Text style={s.body}>{item.description}</Text>
+        {!!item.preferred_date && <Text style={s.body}>Fecha preferida: {item.preferred_date} · {item.preferred_time || 'Horario por acordar'}</Text>}
         <Text style={s.label}>
           {item.provider_name} · {item.commune_name}
         </Text>
         {!!item.address && <Text style={s.body}>{item.address}</Text>}
         {!client && !item.address && item.status !== 'CANCELLED' && <Text style={s.body}>Verás la dirección exacta después del pago. Por ahora puedes cotizar con la descripción y la comuna.</Text>}
+      </Card>
+      <Card>
+        <Text style={s.title}>Fotos del problema</Text>
+        {problemPhotos.length===0&&<Text style={s.body}>El cliente aún no adjunta fotos.</Text>}
+        {problemPhotos.map(photo=><View key={photo.id} style={{gap:8}}>{openedPhotos[photo.id]?<Image source={{uri:openedPhotos[photo.id]}} style={{width:'100%',height:220,borderRadius:12}} resizeMode="contain"/>:<Button secondary label="Ver foto del problema" busy={busy} onPress={()=>void run(async()=>{const result=await api<{image_base64:string}>(`requests/${id}/photos/${photo.id}/`,session.token);setOpenedPhotos(current=>({...current,[photo.id]:`data:image/jpeg;base64,${result.image_base64}`}));})}/>}</View>)}
+        {client&&item.status==='PENDING'&&<>
+          <Button secondary label="Agregar otra foto" busy={busy} disabled={problemPhotos.length>=5} onPress={()=>void run(async()=>{const picked=await ImagePicker.launchImageLibraryAsync({mediaTypes:['images'],base64:true,quality:0.6,allowsEditing:true});if(picked.canceled)return;const image=picked.assets[0]?.base64;if(!image||image.length>2800000)throw new Error('Elige una foto de hasta 2 MB.');await api(`requests/${id}/photos/`,session.token,'POST',{image_base64:image});await refresh();})}/>
+          <Field label="Cambiar fecha preferida (AAAA-MM-DD)" value={changeDate} onChangeText={setChangeDate} placeholder={item.preferred_date||'2026-11-20'}/>
+          <Chips items={[{id:1,name:'Mañana'},{id:2,name:'Tarde'},{id:3,name:'Noche'}]} selected={[{'Mañana':1,'Tarde':2,'Noche':3}[changeTime]??1]} onSelect={id=>setChangeTime(({1:'Mañana',2:'Tarde',3:'Noche'} as Record<number,string>)[id])}/>
+          <Button secondary label="Guardar nueva fecha" busy={busy} disabled={!/^\d{4}-\d{2}-\d{2}$/.test(changeDate)} onPress={()=>void run(async()=>{await api(`requests/${id}/`,session.token,'PATCH',{preferred_date:changeDate,preferred_time:changeTime});setChangeDate('');await refresh();})}/>
+        </>}
       </Card>
       {item.quote && (
         <Card>
@@ -676,7 +725,7 @@ export function Profile({
           });
           setPersonal(user); onUser(user); setPersonalSaved(true);
         })} />
-        {personalSaved && <Text accessibilityLiveRegion="polite" style={s.body}>Datos guardados para tu próxima visita.</Text>}
+        {personalSaved && <Notice tone="success" title="Datos guardados" message="Usaremos estos datos en tus próximas solicitudes."/>}
       </Card>
       {session.user.role === "PROVIDER" && !profile && (
         <Button label="Cargar perfil" busy={busy} onPress={() => void load()} />
@@ -747,9 +796,7 @@ export function Profile({
             }
           />
           {saved && (
-            <Text accessibilityLiveRegion="polite" style={s.body}>
-              Perfil guardado correctamente.
-            </Text>
+            <Notice tone="success" title="Perfil guardado" message="Tus cambios ya están disponibles para los clientes."/>
           )}
         </Card>
       )}
@@ -761,7 +808,7 @@ export function Profile({
         onPress={logout}
       />
       <Text style={s.body}>
-        FIX&GO · Prototipo académico. Los pagos y tarjetas son de demostración, sin cobros reales ni verificación de credenciales profesionales.
+        FIX&GO · Servicios para tu hogar. Los pagos son simulados y no se han verificado las credenciales de los prestadores.
       </Text>
     </>
   );

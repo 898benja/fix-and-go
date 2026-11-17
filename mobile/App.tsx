@@ -12,7 +12,7 @@ import {
   Text,
   View,
 } from "react-native";
-import { api, ApiError, checkHealth, Provider, Session, User } from "./src/api";
+import { api, ApiError, checkHealth, onSessionExpired, Provider, Session, User } from "./src/api";
 import {
   Access,
   Detail,
@@ -21,7 +21,7 @@ import {
   Profile,
   Requests,
 } from "./src/screens";
-import { Button, colors, s } from "./src/ui";
+import { Button, Notice, colors, s } from "./src/ui";
 import { ProviderHome } from "./src/provider-home";
 import { Information } from './src/information';
 const SESSION_KEY = "fixgo.session.token";
@@ -46,7 +46,14 @@ function MobileApp() {
   const [publicInfo, setPublicInfo] = useState(false);
   const [tab, setTab] = useState<Tab>("explore");
   const [route, setRoute] = useState<Route>(null);
-  const scroll = useRef<ScrollView>(null);
+  const scroll = useRef<import('react-native').ScrollViewInstance>(null);
+  useEffect(() => onSessionExpired(token => {
+    if (token !== session?.token) return;
+    setSession(null);
+    setRoute(null);
+    setError("Tu sesión terminó. Vuelve a ingresar para continuar.");
+    void saveToken(null).catch(() => { /* Local session is already closed. */ });
+  }), [session?.token]);
   async function clearSession() {
     await saveToken(null);
     setSession(null);
@@ -89,7 +96,9 @@ function MobileApp() {
           setTab(user.role === "CLIENT" ? "explore" : "home");
         }
       } catch (e) {
-        if (e instanceof ApiError && e.status === 401) await saveToken(null);
+        if (e instanceof ApiError && e.status === 401) {
+          try { await saveToken(null); } catch { /* Session remains closed if secure storage is unavailable. */ }
+        }
         setError(
           e instanceof Error ? e.message : "No se pudo recuperar la sesión.",
         );
@@ -190,27 +199,7 @@ function MobileApp() {
                 }}
               />
             )}
-            {!!error && (
-              <View
-                accessibilityRole="alert"
-                accessibilityLiveRegion="assertive"
-                style={{
-                  backgroundColor: "#FCE8E4",
-                  padding: 16,
-                  borderRadius: 14,
-                  gap: 8,
-                }}
-              >
-                <Text style={{ color: "#842E22", lineHeight: 21 }}>
-                  {error}
-                </Text>
-                <Button
-                  secondary
-                  label="Cerrar aviso"
-                  onPress={() => setError("")}
-                />
-              </View>
-            )}
+            {!!error && <Notice message={error} onDismiss={() => setError("")} />}
             {busy && (
               <ActivityIndicator
                 accessibilityLabel="Cargando"
@@ -228,15 +217,14 @@ function MobileApp() {
                   label="Comprobar conexión"
                   onPress={() =>
                     void run(async () => {
+                      setConnected(false);
                       await checkHealth();
                       setConnected(true);
                     })
                   }
                 />
                 {connected && (
-                  <Text style={s.body}>
-                    Conexión lista. FIX&GO está conectado con el servidor.
-                  </Text>
+                  <Notice tone="success" title="Conexión disponible" message="Ya puedes ingresar y gestionar tus servicios."/>
                 )}
               </>
             ) : route?.kind === "new" ? (

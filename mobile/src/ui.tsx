@@ -22,22 +22,26 @@ export function Button({
   busy = false,
   secondary = false,
   disabled = false,
+  destructive = false,
 }: {
   label: string;
   onPress: () => void;
   busy?: boolean;
   secondary?: boolean;
   disabled?: boolean;
+  destructive?: boolean;
 }) {
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityState={{ disabled: busy || disabled }}
+      accessibilityLabel={label}
+      accessibilityState={{ disabled: busy || disabled, busy }}
       disabled={busy || disabled}
       onPress={onPress}
       style={({ pressed }) => [
         s.button,
         secondary && s.secondary,
+        destructive && { backgroundColor: "#A62A21" },
         (pressed || busy || disabled) && { opacity: 0.55 },
       ]}
     >
@@ -66,8 +70,8 @@ export function Field({ label, ...props }: TextInputProps & { label: string }) {
     </View>
   );
 }
-export function Card({ children }: { children: ReactNode }) {
-  return <View style={s.card}>{children}</View>;
+export function Card({ children, compact = false }: { children: ReactNode; compact?: boolean }) {
+  return <View style={[s.card, compact && {width:"100%", maxWidth:520}]}>{children}</View>;
 }
 export function Chips({
   items,
@@ -163,3 +167,25 @@ export const s = StyleSheet.create({
     fontSize: 12,
   },
 });
+
+/** Persistent feedback: readable text, semantic announcements, no disappearing errors. */
+export function Notice({message, title, tone = "error", onDismiss}: {
+  message: string; title?: string; tone?: "error" | "success" | "warning" | "info"; onDismiss?: () => void;
+}) {
+  const palette = {
+    error: {bg:"#FFF1F0", ink:"#8A251E", label:"No pudimos completar la acción", icon:"!"},
+    success: {bg:"#EAF5EF", ink:"#185B36", label:"Todo listo", icon:"✓"},
+    warning: {bg:"#FFF6DF", ink:"#6F4B00", label:"Revisa esta información", icon:"!"},
+    info: {bg:"#ECF2FA", ink:"#23466D", label:"Información del servicio", icon:"i"},
+  }[tone];
+  return <View accessibilityRole={tone === "error" ? "alert" : undefined}
+    accessibilityLiveRegion={tone === "error" ? "assertive" : "polite"}
+    style={{backgroundColor:palette.bg, borderRadius:16, padding:16, gap:10, borderLeftWidth:4, borderLeftColor:palette.ink}}>
+    <View style={{flexDirection:"row", gap:10, alignItems:"flex-start"}}>
+      <Text accessible={false} style={{color:palette.ink,fontSize:20,fontWeight:"800"}}>{palette.icon}</Text>
+      <View style={{flex:1,gap:5}}><Text style={{color:palette.ink,fontSize:16,fontWeight:"700"}}>{title ?? palette.label}</Text>
+        <Text selectable style={{color:palette.ink,fontSize:16,lineHeight:24}}>{message}</Text></View>
+    </View>
+    {onDismiss && <Button secondary label="Cerrar aviso" onPress={onDismiss}/>}
+  </View>;
+}

@@ -48,3 +48,20 @@ class DemoDataCommandTests(TestCase):
 
         call_command('seed_demo_data', '--reset', stdout=StringIO())
         self.assertTrue(User.objects.filter(pk=unrelated.pk).exists())
+
+class ExceptionContractTests(TestCase):
+    def test_model_validation_is_readable_bad_request(self):
+        from django.core.exceptions import ValidationError
+        from core.exceptions import custom_exception_handler
+        from rest_framework.renderers import JSONRenderer
+        response = custom_exception_handler(ValidationError({'price': ['Indica un precio válido.']}), {})
+        self.assertEqual(response.status_code, 400)
+        encoded = JSONRenderer().render(response.data).decode()
+        self.assertNotIn('ErrorDetail', encoded)
+        self.assertEqual(str(response.data['detail']['price'][0]), 'Indica un precio válido.')
+
+    def test_unexpected_error_does_not_disclose_details(self):
+        from core.exceptions import custom_exception_handler
+        response = custom_exception_handler(RuntimeError('private secret'), {})
+        self.assertEqual(response.status_code, 500)
+        self.assertNotIn('private secret', str(response.data))

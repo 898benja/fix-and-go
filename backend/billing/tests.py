@@ -98,11 +98,20 @@ class BillingTests(APITestCase):
 
     def test_disabled_or_non_debug_cannot_simulate_a_payment(self):
         for flags in [{'DEBUG':False, 'PAYMENTS_DEMO_ENABLED':True}, {'DEBUG':True, 'PAYMENTS_DEMO_ENABLED':False}]:
-            with self.settings(**flags):
+            with self.settings(PUBLIC_DEMO_ENABLED=False, **flags):
                 self.assertFalse(self.get(self.customer,'billing-summary').data['demo_enabled'])
                 self.assertEqual(self.post(self.customer,'checkout').status_code,403)
                 self.assertEqual(self.post(self.customer,'demo-payment-result',{'outcome':'approved'}).status_code,403)
         self.assertFalse(PaymentOrder.objects.exists())
+
+    def test_isolated_public_demo_can_simulate_without_debug(self):
+        with self.settings(DEBUG=False, PUBLIC_DEMO_ENABLED=True,
+                           PAYMENTS_DEMO_ENABLED=True, WEBPAY_INTEGRATION_ENABLED=False):
+            self.assertTrue(self.get(self.customer, 'billing-summary').data['demo_enabled'])
+            self.assertEqual(self.post(self.customer, 'checkout').status_code, 201)
+            self.assertEqual(self.post(self.customer, 'demo-payment-result',
+                                       {'outcome': 'approved'}).status_code, 200)
+            self.assertEqual(PaymentOrder.objects.get(service_request=self.sr).status, 'DEMO_PAID')
 
     def test_tampered_amounts_states_and_card_data_are_rejected(self):
         for body in [{'total':1}, {'status':'DEMO_PAID'}, {'card_number':'4242424242424242'}]:

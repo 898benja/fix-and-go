@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Image, Linking, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
 import { api, options, Option, Page, Provider, Session } from './api';
-import { Button, colors, s } from './ui';
+import { Button, Notice, colors, s } from './ui';
 import ServiceMap from './ServiceMap';
 import { Point } from './map-contract';
 import type { Run } from './screens';
@@ -30,7 +30,8 @@ export function Explore({session,busy,onChoose}:{session:Session;run:Run;busy:bo
   const [loading,setLoading]=useState(false);
   const [error,setError]=useState('');
   const [retry,setRetry]=useState(0);
-  useEffect(()=>{let active=true;options('categories/').then(value=>{if(active)setCategories(value);}).catch(()=>{});return()=>{active=false;};},[]);
+  const [categoryError,setCategoryError]=useState('');
+  useEffect(()=>{let active=true;options('categories/').then(value=>{if(active){setCategories(value);setCategoryError('');}}).catch(()=>{if(active)setCategoryError('No pudimos cargar las especialidades. Puedes explorar los prestadores o volver a intentar.');});return()=>{active=false;};},[retry]);
   // Cada cambio invalida su respuesta anterior. No se sigue ninguna URL externa de paginación.
   useEffect(()=>{
     let active=true;setLoading(true);setError('');setSelected(null);
@@ -73,7 +74,8 @@ export function Explore({session,busy,onChoose}:{session:Session;run:Run;busy:bo
         <Button label="Solicitar una cotización" disabled={busy} onPress={()=>onChoose({...chosen,...(point?{requested_point:point}:{})})}/>
       </>:<>
         <View style={{flexDirection:'row',alignItems:'center',gap:10}}><Text style={s.title}>{loading?'Buscando…':point?'Prestadores cerca de ti':'Elige un prestador'}</Text>{loading&&<ActivityIndicator color={colors.ink}/>}</View>
-        {!!error?<><Text style={{color:'#842E22'}}>{error}</Text><Button secondary label="Volver a intentar" onPress={()=>setRetry(retry+1)}/></>:<>
+        {!!categoryError && <><Notice tone="warning" message={categoryError}/><Button secondary label="Cargar especialidades" onPress={()=>setRetry(v=>v+1)}/></>}
+        {!!error?<><Notice message={error}/><Button secondary label="Volver a intentar" onPress={()=>setRetry(retry+1)}/></>:<>
           <Text style={{fontSize:14,color:colors.muted}}>{rows.length?'Toca su marcador o desliza las tarjetas.':loading?'Buscamos servicios para tu hogar.':'Sin resultados. Prueba otra zona o especialidad.'}</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{gap:10}}>
             {rows.map(p=><Pressable key={p.id} accessibilityRole="button" accessibilityLabel={`Ver perfil de ${p.display_name}`} onPress={()=>setSelected(p.id)} style={{width:240,borderWidth:1,borderColor:'#DCE4E3',borderRadius:16,padding:12,gap:7}}><View style={{flexDirection:'row',gap:10,alignItems:'center'}}><ProviderPortrait provider={p} size={40}/><Text style={{fontSize:16,fontWeight:'800',color:colors.ink,flex:1}} numberOfLines={1}>{p.display_name}</Text></View><ProviderRating provider={p}/><Text style={{fontSize:13,color:colors.muted}} numberOfLines={1}>{p.categories.map(c=>c.name).join(' · ')}{p.distance_km!=null?` · ${p.distance_km} km`:''}</Text></Pressable>)}

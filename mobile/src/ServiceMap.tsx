@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { Text, View } from 'react-native';
 import { WebView } from 'react-native-webview';
+import type { WebViewProps } from 'react-native-webview/lib/WebView';
 import { apiUrl } from './api';
 import { handleMapMessage, MapProps } from './map-contract';
 
 export default function ServiceMap(props: MapProps) {
-  const frame=useRef<WebView>(null);
+  const frame=useRef<{ injectJavaScript: (script: string) => void }>(null);
   const [ready,setReady]=useState(false);
   const [failed,setFailed]=useState(false);
   const url=`${apiUrl}/map/`;
@@ -14,10 +15,10 @@ export default function ServiceMap(props: MapProps) {
   },[ready,props.point,props.markers,props.readOnly,props.actionLabel,props.immersive,props.selectedId]);
   if(!apiUrl||failed)return <Text>Mapa no disponible. Usa las coordenadas y el listado.</Text>;
   return <View style={{height:props.height??380,borderRadius:props.immersive?0:18,overflow:'hidden'}}><WebView
-    ref={frame} source={{uri:url}} userAgent="FixGo-MVP/1.0 (+https://github.com/898benja/fix-and-go)"
+    ref={frame as never} source={{uri:url}} userAgent="FixGo-MVP/1.0 (+https://github.com/898benja/fix-and-go)"
     onLoadEnd={()=>setReady(true)} onError={()=>setFailed(true)}
     onHttpError={()=>setFailed(true)} cacheEnabled javaScriptEnabled
-    onShouldStartLoadWithRequest={r=>r.url===url||r.url==='about:blank'}
-    onMessage={e=>handleMapMessage(e.nativeEvent.data,props)}
+    onShouldStartLoadWithRequest={(r: Parameters<NonNullable<WebViewProps['onShouldStartLoadWithRequest']>>[0])=>r.url===url||r.url==='about:blank'}
+    onMessage={(e: Parameters<NonNullable<WebViewProps['onMessage']>>[0])=>handleMapMessage(e.nativeEvent.data,props)}
   /></View>;
 }

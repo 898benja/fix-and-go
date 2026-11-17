@@ -10,7 +10,7 @@ class ServiceRequest(models.Model):
     - El cliente y el prestador no pueden ser el mismo usuario.
     - El prestador debe estar activo y ofrecer la categoría y comuna solicitadas (BE-07).
     - Los estados siguen la máquina: PENDING→QUOTED→ACCEPTED/REJECTED/CANCELLED.
-    - CANCELLED solo es válido desde PENDING o QUOTED (no desde ACCEPTED).
+    - CANCELLED admite ACCEPTED solo sin pago; services.workflow aplica las guardas.
     """
 
     class Status(models.TextChoices):
@@ -29,7 +29,7 @@ class ServiceRequest(models.Model):
     VALID_TRANSITIONS = {
         Status.PENDING: [Status.QUOTED, Status.CANCELLED],
         Status.QUOTED: [Status.ACCEPTED, Status.REJECTED, Status.CANCELLED, Status.PENDING],
-        Status.ACCEPTED: [Status.IN_PROGRESS],     # P2: iniciar servicio
+        Status.ACCEPTED: [Status.IN_PROGRESS, Status.CANCELLED],     # P2: iniciar servicio
         Status.REJECTED: [],                         # estado terminal
         Status.CANCELLED: [],                        # estado terminal
         Status.IN_PROGRESS: [Status.COMPLETED],      # P2: completar servicio
@@ -127,6 +127,14 @@ class WorkEvidence(models.Model):
     uploader = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
     photo = models.FileField(upload_to='work_evidence/')
     caption = models.CharField(max_length=240, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
+class RequestPhoto(models.Model):
+    """Imagen privada del problema; el prestador la ve antes de cotizar."""
+    service_request = models.ForeignKey(ServiceRequest, on_delete=models.PROTECT, related_name='request_photos')
+    uploader = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    photo = models.FileField(upload_to='request_photos/')
     created_at = models.DateTimeField(auto_now_add=True)
 
 

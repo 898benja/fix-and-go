@@ -32,6 +32,41 @@ class RequestWorkflowTests(APITestCase):
             'description': 'Reparación de prueba', 'price': 35000,
         })
 
+    def test_client_can_adjust_date_only_before_quote(self):
+        from django.utils import timezone
+        from datetime import timedelta
+        self.client.force_authenticate(self.customer)
+        url = reverse('request-detail', args=[self.sr.pk])
+        date = (timezone.localdate() + timedelta(days=2)).isoformat()
+        self.assertEqual(self.client.patch(url, {'preferred_date': date, 'preferred_time':'Tarde'}, format='json').status_code, 200)
+        self.sr.refresh_from_db()
+        self.assertEqual(self.sr.preferred_date.isoformat(), date)
+        self.assertEqual(self.sr.preferred_time, 'Tarde')
+        self.assertEqual(self.client.patch(url, {'preferred_date':'2020-01-01','preferred_time':'Mañana'}, format='json').status_code, 400)
+        self.client.force_authenticate(self.provider)
+        self.assertEqual(self.client.patch(url, {'preferred_date':date,'preferred_time':'Mañana'}, format='json').status_code, 403)
+        self.quote()
+        self.client.force_authenticate(self.customer)
+        self.assertEqual(self.client.patch(url, {'preferred_date':date,'preferred_time':'Mañana'}, format='json').status_code, 409)
+
+    def test_problem_photos_are_private_and_close_after_quote(self):
+        import base64, io
+        from PIL import Image
+        output = io.BytesIO()
+        Image.new('RGB', (20,20), 'blue').save(output, format='PNG')
+        url = reverse('request-photos', args=[self.sr.pk])
+        self.client.force_authenticate(self.customer)
+        created = self.client.post(url, {'image_base64':base64.b64encode(output.getvalue()).decode()}, format='json')
+        self.assertEqual(created.status_code, 201)
+        self.client.force_authenticate(self.outsider)
+        self.assertEqual(self.client.get(url).status_code, 404)
+        self.client.force_authenticate(self.provider)
+        self.assertEqual(self.client.get(url).data[0]['id'], created.data['id'])
+        self.assertEqual(self.client.get(reverse('request-photo', args=[self.sr.pk,created.data['id']])).status_code, 200)
+        self.quote()
+        self.client.force_authenticate(self.customer)
+        self.assertEqual(self.client.post(url, {'image_base64':base64.b64encode(output.getvalue()).decode()}, format='json').status_code, 400)
+
     def test_create_and_accept_is_idempotent(self):
         self.assertEqual(self.quote().status_code, 201)
         for _ in range(2):
@@ -124,10 +159,18 @@ class RequestWorkflowTests(APITestCase):
         self.quote()
         self.post_as(self.customer, 'quote-accept')
         self.assertEqual(self.post_as(self.provider,'request-start').status_code,409)
+        self.assertEqual(self.post_as(self.customer, 'service-messages', {'text': 'Hola'}).status_code, 403)
+        material = self.post_as(self.provider, 'materials', {'description': 'Repuesto', 'quantity': 1, 'unit_price': 500})
+        self.assertEqual(material.status_code, 201)
+        self.assertEqual(self.post_as(self.customer, 'checkout').status_code, 409)
+        self.client.force_authenticate(self.customer)
+        decision = self.client.post(f'/api/v1/requests/{self.sr.pk}/materials/{material.data["id"]}/decision/', {'decision': 'APPROVED'}, format='json')
+        self.assertEqual(decision.status_code, 200)
         self.client.force_authenticate(self.customer)
         self.client.post('/api/v1/wallet/demo-card/',{},format='json')
         self.assertEqual(self.post_as(self.customer,'checkout').status_code,201)
         self.assertEqual(self.post_as(self.customer,'demo-payment-result',{'outcome':'approved'}).status_code,200)
+        self.assertEqual(self.post_as(self.customer, 'service-messages', {'text': 'Hola, coordinemos la visita.'}).status_code, 201)
         self.assertEqual(self.post_as(self.provider, 'request-start').status_code, 200)
         self.assertEqual(self.post_as(self.customer, 'request-complete').status_code, 409)
         # Foto real creada y subida mediante el contrato API, en almacenamiento temporal.

@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
 import { api, Session } from './api';
-import { Button, Card, colors, s } from './ui';
+import { Button, Card, Notice, colors, s } from './ui';
+import { useRefresh } from './use-refresh';
 import ServiceMap from './ServiceMap';
 import { validPoint } from './map-contract';
 import type { Run } from './screens';
@@ -10,22 +11,27 @@ type Job = {id:number;client_name:string;category_name:string;commune_name:strin
 type Dashboard = {warning_count:number;counts:Record<string,number>;recent:Job[];customers:{id:number;name:string;completed_jobs:number}[]};
 export function ProviderHome({session,run,busy,onOpen}:{session:Session;run:Run;busy:boolean;onOpen:(id:number)=>void}) {
   const [data,setData]=useState<Dashboard|null>(null);
-  const load=()=>run(async()=>setData(await api<Dashboard>('provider/dashboard/',session.token)));
+  const refresh=async()=>setData(await api<Dashboard>('provider/dashboard/',session.token));
+  const load=()=>run(refresh);
+  const refreshError=useRefresh(refresh, !!data, busy);
   useEffect(()=>{void load();},[]);
   const markers=(data?.recent??[]).filter(validPoint).map(job=>({
     id:job.id,name:job.client_name,description:`${job.category_name} · ${job.status_display}`,
     latitude:job.latitude!,longitude:job.longitude!,
   }));
   return <>
+    {!!refreshError && <Notice tone="warning" title="Actualización pendiente" message={refreshError}/>}
     <Text style={s.label}>TU ESPACIO DE TRABAJO</Text>
     <Text style={s.heading}>Hola, {session.user.first_name || 'prestador'}</Text>
     <Text style={s.body}>Revisa tus solicitudes y organiza tu día en Santiago.</Text>
     {!!data?.warning_count&&<Card><Text style={s.title}>Alertas confirmadas: {data.warning_count} de 3</Text><Text style={s.body}>Revisa la resolución en el servicio correspondiente. Con tres incumplimientos confirmados se deshabilita la cuenta.</Text></Card>}
     <View style={{flexDirection:'row',gap:10,flexWrap:'wrap'}}>
       {[
-        ['Por cotizar',data?.counts.PENDING??0],
-        ['En curso',(data?.counts.ACCEPTED??0)+(data?.counts.IN_PROGRESS??0)],
-        ['Terminados',data?.counts.COMPLETED??0],
+        ['Por cotizar',data ? data.counts.PENDING ?? 0 : "—"],
+        ['Cotizados',data ? data.counts.QUOTED ?? 0 : '—'],
+        ['Aceptados',data ? data.counts.ACCEPTED ?? 0 : '—'],
+        ['En curso',data ? data.counts.IN_PROGRESS ?? 0 : '—'],
+        ['Terminados',data ? data.counts.COMPLETED ?? 0 : "—"],
       ].map(([label,count])=><View key={label} style={{flex:1,minWidth:95,padding:16,borderRadius:18,backgroundColor:'white',gap:6}}>
         <Text style={{fontSize:30,fontWeight:'800',color:colors.ink}}>{count}</Text><Text style={s.body}>{label}</Text>
       </View>)}

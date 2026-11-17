@@ -10,6 +10,8 @@ El frontend puede presentar errores sin analizar formatos distintos por endpoint
 """
 
 import logging
+from django.core.exceptions import ValidationError as DjangoValidationError
+from rest_framework.exceptions import ValidationError
 
 from rest_framework.views import exception_handler, set_rollback
 from rest_framework.response import Response
@@ -40,6 +42,8 @@ def custom_exception_handler(exc, context):
         "detail": str | dict,
     }
     """
+    if isinstance(exc, DjangoValidationError):
+        exc = ValidationError(exc.message_dict if hasattr(exc, "message_dict") else exc.messages)
     response = exception_handler(exc, context)
 
     if response is None:
@@ -64,7 +68,7 @@ def custom_exception_handler(exc, context):
         if 'detail' in original_data and len(original_data) == 1:
             response.data = {
                 'code': error_code,
-                'detail': str(original_data['detail']),
+                'detail': original_data['detail'],
             }
         # Si tiene 'non_field_errors', extraer como detail
         elif 'non_field_errors' in original_data:

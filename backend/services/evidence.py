@@ -13,7 +13,7 @@ from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.response import Response
 from billing.workflow import owned
 from billing.serializers import StrictInput
-from .models import WorkEvidence
+from .models import WorkEvidence, RequestPhoto
 
 
 class EvidenceInput(StrictInput):
@@ -83,4 +83,47 @@ def evidence_photo(request,pk,evidence_id):
         encoded=base64.b64encode(file.read()).decode('ascii')
     response=Response({'image_base64':encoded,'content_type':'image/jpeg'})
     response['Cache-Control']='private, no-store'
+    return response
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def request_photos(request, pk):
+    sr = owned(pk, request.user)
+    if request.method == 'GET':
+        return Response(list(sr.request_photos.order_by('id').values('id', 'created_at')))
+    if request.user.id != sr.client_id:
+        raise ValidationError('Solo el cliente puede agregar fotos del problema.')
+    serializer = EvidenceInput(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    image = normalize(serializer.validated_data['image_base64'])
+    saved = None
+    try:
+        with transaction.atomic():
+            sr = owned(pk, request.user, lock=True)
+            if sr.status != sr.Status.PENDING:
+                raise ValidationError('Las fotos se agregan antes de recibir la cotización.')
+            if sr.request_photos.count() >= 5:
+                raise ValidationError('Puedes adjuntar hasta 5 fotos del problema.')
+            saved = RequestPhoto(service_request=sr, uploader=request.user)
+            saved.photo.save(f'{uuid.uuid4().hex}.jpg', ContentFile(image), save=False)
+            saved.save()
+        return Response({'id': saved.id, 'created_at': saved.created_at}, status=201)
+    except Exception:
+        if saved and saved.photo.name:
+            saved.photo.delete(save=False)
+        raise
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def request_photo(request, pk, photo_id):
+    sr = owned(pk, request.user)
+    item = sr.request_photos.filter(pk=photo_id).first()
+    if not item:
+        raise NotFound('Foto no encontrada.')
+    with item.photo.open('rb') as file:
+        encoded = base64.b64encode(file.read()).decode('ascii')
+    response = Response({'image_base64': encoded, 'content_type': 'image/jpeg'})
+    response['Cache-Control'] = 'private, no-store'
     return response

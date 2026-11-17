@@ -49,6 +49,12 @@ class ServiceRequestCreateSerializer(serializers.ModelSerializer):
             )
         return value
 
+    def validate_preferred_date(self, value):
+        from django.utils import timezone
+        if value and value < timezone.localdate():
+            raise serializers.ValidationError('Elige una fecha de hoy en adelante.')
+        return value
+
     def validate(self, attrs):
         """BE-07: validaciones cruzadas de negocio."""
         provider = attrs['provider']

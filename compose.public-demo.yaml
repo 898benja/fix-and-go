@@ -1,0 +1,43 @@
+# Instancia aislada para un enlace temporal de demostración. No usa el volumen
+# de datos local y no debe recibir información personal real.
+name: fixgo_public_demo
+services:
+  backend:
+    build: ./backend
+    environment:
+      DJANGO_SECRET_KEY: ${DEMO_DJANGO_SECRET_KEY:?Define DEMO_DJANGO_SECRET_KEY}
+      DJANGO_DEBUG: "false"
+      PUBLIC_DEMO_ENABLED: "true"
+      DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1,backend,.trycloudflare.com
+      PAYMENTS_DEMO_ENABLED: "true"
+      WEBPAY_INTEGRATION_ENABLED: "false"
+      SQLITE_PATH: /data/db.sqlite3
+      MEDIA_ROOT: /data/media
+    volumes:
+      - demo_data:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health/', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+      start_period: 30s
+  mobile:
+    build: ./mobile
+    environment:
+      EXPO_PUBLIC_API_URL: http://localhost:18000
+    depends_on:
+      backend:
+        condition: service_healthy
+  gateway:
+    image: caddy:2.10-alpine
+    ports:
+      - "127.0.0.1:18091:80"
+    volumes:
+      - ./Caddyfile.public-demo:/etc/caddy/Caddyfile:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+      mobile:
+        condition: service_started
+volumes:
+  demo_data:

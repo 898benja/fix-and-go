@@ -21,6 +21,9 @@ if not SECRET_KEY:
     raise ImproperlyConfigured('Configura DJANGO_SECRET_KEY en backend/.env')
 
 DEBUG = os.environ.get('DJANGO_DEBUG', 'false').lower() == 'true'
+# Permite el simulador sin DEBUG solo en la instancia pública aislada.
+# No habilita Webpay ni cobros reales.
+PUBLIC_DEMO_ENABLED = os.environ.get('PUBLIC_DEMO_ENABLED', 'false').lower() == 'true'
 
 ALLOWED_HOSTS = [
     h.strip()
@@ -209,6 +212,8 @@ LOGGING = {
 # No habilita cobros reales. Requiere opt-in explícito y DEBUG para la demostración.
 PAYMENTS_DEMO_ENABLED = os.environ.get('PAYMENTS_DEMO_ENABLED', 'false').lower() == 'true'
 WEBPAY_INTEGRATION_ENABLED = os.environ.get('WEBPAY_INTEGRATION_ENABLED', 'false').lower() == 'true'
+if PUBLIC_DEMO_ENABLED and WEBPAY_INTEGRATION_ENABLED:
+    raise ImproperlyConfigured('La demo pública no admite Webpay de integración.')
 # Explicit callback origin; never derive a redirect from untrusted request headers.
 WEBPAY_RETURN_URL = os.environ.get('WEBPAY_RETURN_URL', '')
 WEBPAY_APP_URL = os.environ.get('WEBPAY_APP_URL', 'http://localhost:8091/')
