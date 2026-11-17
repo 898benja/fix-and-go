@@ -26,6 +26,7 @@ from .serializers import (
     ServiceRequestDetailSerializer,
     ServiceRequestListSerializer,
 )
+from core.notifications import queue_email
 
 logger = logging.getLogger(__name__)
 
@@ -117,6 +118,8 @@ def request_list_create(request):
             'Solicitud #%d creada por cliente #%d al prestador #%d',
             sr.pk, sr.client_id, sr.provider_id,
         )
+        queue_email(sr.client.email, f'FIX&GO · Solicitud #{sr.pk} recibida',
+                    f'Hola, {sr.client.first_name}:\n\nRegistramos tu solicitud de {sr.category.name} para {sr.commune.name}. Prestador: {sr.provider.provider_profile.display_name}. Fecha preferida: {sr.preferred_date or "por acordar"} {sr.preferred_time or ""}. Te avisaremos en la app cuando llegue la cotización.\n\nAún no se ha confirmado precio ni pago.')
 
         return Response(
             ServiceRequestDetailSerializer(sr, context={'request': request}).data,

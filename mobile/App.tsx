@@ -124,10 +124,10 @@ function MobileApp() {
   useEffect(() => {
     scroll.current?.scrollTo({ y: 0, animated: false });
   }, [route, tab, session?.user.id]);
-  async function onSession(value: Session) {
+  async function onSession(value: Session, submittedProvider = false) {
     await saveToken(value.token);
     setSession(value);
-    setTab(value.user.role === "CLIENT" ? "explore" : "home");
+    setTab(submittedProvider ? "profile" : value.user.role === "CLIENT" ? "explore" : "home");
     setRoute(null);
   }
   const open = (id: number) => {

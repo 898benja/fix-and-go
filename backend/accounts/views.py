@@ -27,6 +27,7 @@ from .serializers import (
     UserSerializer,
 )
 from .verification import VerificationInput, save_verification
+from core.notifications import queue_email
 from rest_framework.exceptions import ValidationError
 
 logger = logging.getLogger(__name__)
@@ -58,6 +59,9 @@ def register_view(request):
         'Nuevo usuario registrado: #%d — rol: %s',
         user.pk, user.role,
     )
+    if user.role == User.Role.PROVIDER:
+        queue_email(user.email, 'FIX&GO · Recibimos tu postulación',
+                    f'Hola, {user.first_name}:\n\nRecibimos tus antecedentes. Administración revisará tu cuenta y te avisaremos por correo cuando haya una decisión. Hasta entonces tu perfil no recibirá solicitudes.\n\nEquipo FIX&GO')
 
     return Response(
         {

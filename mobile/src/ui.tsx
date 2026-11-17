@@ -107,7 +107,7 @@ export function Chips({
 }
 export const s = StyleSheet.create({
   page: { flex: 1, backgroundColor: colors.background },
-  content: { padding: 22, gap: 18, paddingBottom: 36 },
+  content: { padding: 16, gap: 18, paddingBottom: 36, width: "100%", maxWidth: 760, alignSelf: "center" },
   heading: {
     fontSize: 30,
     lineHeight: 36,
@@ -155,7 +155,7 @@ export const s = StyleSheet.create({
     justifyContent: "center",
   },
   chipSelected: { backgroundColor: colors.ink },
-  chipText: { fontSize: 13, fontWeight: "600", color: colors.ink },
+  chipText: { fontSize: 15, fontWeight: "600", color: colors.ink },
   hero: { backgroundColor: colors.ink, padding: 24, borderRadius: 24, gap: 14 },
   badge: {
     color: "#84600C",

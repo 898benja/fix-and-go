@@ -81,6 +81,19 @@ DATABASES = {
     }
 }
 
+# Sin servidor SMTP, los avisos se guardan localmente para revisión del MVP.
+# El envío externo requiere EMAIL_HOST, credenciales y remitente propios.
+EMAIL_HOST = os.environ.get('EMAIL_HOST', '')
+EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '587'))
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
+EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'true').lower() == 'true'
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'FIX&GO <avisos@fixgo.local>')
+EMAIL_BACKEND = ('django.core.mail.backends.smtp.EmailBackend' if EMAIL_HOST else
+                 'django.core.mail.backends.filebased.EmailBackend')
+EMAIL_FILE_PATH = str(BASE_DIR.parent / '.local' / 'emails')
+EMAIL_TIMEOUT = 8
+
 # ---------------------------------------------------------------------------
 # Autenticación y usuarios
 # ---------------------------------------------------------------------------

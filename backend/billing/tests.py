@@ -36,6 +36,18 @@ class BillingTests(APITestCase):
         self.assertEqual(res.status_code, 201, res.data)
         return res.data['id']
 
+    def test_receipt_email_is_sent_once_after_confirmed_payment(self):
+        from django.core import mail
+        self.post(self.customer, 'checkout')
+        with self.captureOnCommitCallbacks(execute=True):
+            self.post(self.customer, 'demo-payment-result', {'outcome':'approved'})
+            self.post(self.customer, 'demo-payment-result', {'outcome':'approved'})
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, [self.customer.email])
+        self.assertIn('$35.000', mail.outbox[0].body)
+        self.assertIn('Prestador prueba', mail.outbox[0].body)
+        self.assertIn('No se cobró dinero real', mail.outbox[0].body)
+
     def approve(self, pk):
         return self.post(self.customer, 'material-decision', {'decision':'APPROVED'}, pk)
 

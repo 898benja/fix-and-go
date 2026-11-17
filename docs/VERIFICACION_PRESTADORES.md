@@ -2,9 +2,9 @@
 
 ## Recorrido
 
-1. El prestador crea una cuenta y puede iniciar sesión, pero su perfil nace **inactivo** y con revisión `DRAFT`.
-2. En **Tu perfil** completa especialidades, comunas, descripción y una foto visible al cliente.
-3. En **Validación profesional** informa RUT chileno, oficio o profesión, formación y experiencia, y adjunta un CV PDF (máximo 3 MB). Acepta expresamente el uso de estos datos para revisar la postulación.
+1. El prestador completa un único formulario con nombre, correo, contraseña, teléfono, RUT, oficio, formación, experiencia, foto y CV PDF de hasta 3 MB; acepta el uso de los antecedentes para la revisión.
+2. Si faltan antecedentes o no son válidos, no se crea la cuenta. Al completar el envío se crea una postulación `PENDING`, con perfil **inactivo**.
+3. La app muestra **Estamos validando tus datos**. Administración puede aprobar o rechazar y el sistema genera un aviso por correo. Tras la aprobación se configuran especialidades, comunas y zona de atención.
 4. El servidor valida el dígito verificador del RUT, la unicidad del RUT, el formato y tamaño del PDF, y exige foto. La solicitud queda `PENDING`. Ni el RUT ni el CV aparecen en el catálogo ni en la API pública.
 5. Un administrador autenticado revisa los antecedentes en Django Admin. El CV se descarga por una ruta protegida del administrador. Puede aprobar solo postulaciones completas o rechazar la postulación y dejar una observación interna.
 6. Solo `APPROVED` y `is_active=True` aparecen en el catálogo y pueden recibir solicitudes nuevas. El prestador consulta su estado desde la app.

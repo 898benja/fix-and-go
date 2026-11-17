@@ -30,6 +30,7 @@ export function ProviderVerification({session,run,busy}:{session:Session;run:Run
   return <Card>
     <Text style={s.title}>Validación profesional</Text>
     <Text style={s.body}>Tu perfil podrá recibir solicitudes cuando revisemos tus antecedentes. El RUT y el CV solo los ve administración.</Text>
+    {review?.status==='PENDING'&&<View style={{backgroundColor:'#FFF1C8',borderRadius:18,padding:20,gap:8}}><Text style={{fontSize:23,fontWeight:'800',color:'#171717'}}>Estamos validando tus datos</Text><Text style={s.body}>Administración revisará tu postulación. Te avisaremos al correo registrado cuando tu cuenta sea aprobada o necesite correcciones.</Text></View>}
     {!!review&&<Notice tone={review.status==='APPROVED'?'success':review.status==='REJECTED'?'warning':'info'} title={{DRAFT:'Completa tu postulación',PENDING:'En revisión',APPROVED:'Perfil aprobado',REJECTED:'Requiere correcciones'}[review.status]} message={review.note||'La revisión de los documentos la realiza el equipo de FIX&GO.'}/>}
     <Button secondary label="Actualizar estado y foto" busy={busy} onPress={()=>void run(load)}/>
     {review?.status!=='APPROVED'&&review?.status!=='PENDING'&&<>

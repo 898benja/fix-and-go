@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Text } from 'react-native';
 import { api, Session } from './api';
 import { Button, Card, s } from './ui';
@@ -8,12 +8,20 @@ export function DemoWallet({session,run,busy,onReady}:{session:Session;run:Run;b
   const [card,setCard]=useState<{brand:string;last4:string}|null>(null);
   const [loaded,setLoaded]=useState(false);
   const load=async()=>{const data=await api<{card:typeof card}>('wallet/demo-card/',session.token);setCard(data.card);setLoaded(true);onReady?.(!!data.card);};
-  // Abrir a petición evita competir con la carga inicial del perfil.
+  const ready = useRef(onReady);
+  ready.current = onReady;
+  useEffect(() => {
+    let active = true;
+    void api<{card:typeof card}>("wallet/demo-card/",session.token).then(data => {
+      if(active) {setCard(data.card);setLoaded(true);ready.current?.(!!data.card);}
+    }).catch(() => {if(active) setLoaded(false);});
+    return () => {active=false;};
+  }, [session.token]);
   return <Card>
     <Text style={s.title}>Método de pago</Text>
-    <Text style={s.body}>Prueba la experiencia de guardar una tarjeta. No ingreses datos bancarios: esta tarjeta es ficticia y no realiza cobros.</Text>
-    {!loaded?<Button secondary label="Seleccionar tarjeta simulada" busy={busy} onPress={()=>void run(load)}/>:
+    <Text style={s.body}>No ingreses datos bancarios. Usaremos una tarjeta ficticia y el cobro real será $0.</Text>
+    {!loaded?<Button secondary label="Cargar método de pago" busy={busy} onPress={()=>void run(load)}/>:
       card?<><Text style={s.title}>{card.brand} · •••• {card.last4}</Text><Button secondary label="Quitar tarjeta" busy={busy} onPress={()=>void run(async()=>{await api('wallet/demo-card/',session.token,'DELETE',{});await load();})}/></>:
-      <Button label="Guardar tarjeta simulada" busy={busy} onPress={()=>void run(async()=>{await api('wallet/demo-card/',session.token,'POST',{});await load();})}/>}
+      <Button label="Usar tarjeta de demostración" busy={busy} onPress={()=>void run(async()=>{await api('wallet/demo-card/',session.token,'POST',{});await load();})}/>}
   </Card>;
 }

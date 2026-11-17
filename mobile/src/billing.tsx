@@ -1,6 +1,6 @@
 /** Materiales y liquidación: los importes definitivos siempre vienen de Django. */
-import { useEffect, useState } from "react";
-import { Linking, Text, View, TextInput, Pressable } from "react-native";
+import { useEffect, useRef, useState, ComponentRef } from "react";
+import { Linking, Text, View, TextInput, Pressable, ScrollView } from "react-native";
 import { api, Page, Session } from "./api";
 import type { Run } from "./screens";
 import { Button, Card, Field, Notice, s } from "./ui";
@@ -39,6 +39,8 @@ export function BillingPanel({id, session, status, data, busy, run, refresh}: {
   const [receipt, setReceipt] = useState<Bill | null>(null);
   const [messages, setMessages] = useState<Message[] | null>(null);
   const [message, setMessage] = useState("");
+  const chatScroll = useRef<ComponentRef<typeof ScrollView>>(null);
+  const nearBottom = useRef(true);
   const [showBreakdown, setShowBreakdown] = useState(false);
   const [showSimulator, setShowSimulator] = useState(false);
   const [hasCard, setHasCard] = useState(false);
@@ -49,13 +51,33 @@ export function BillingPanel({id, session, status, data, busy, run, refresh}: {
   const refunded = bill.status === 'DEMO_REFUNDED';
   const path = `requests/${id}/`;
   const loadMessages = async () => setMessages(await allPages<Message>(`${path}messages/`, session.token));
-  const chatError = useRefresh(loadMessages, paid && messages !== null, busy);
+  const chatError = useRefresh(loadMessages, paid, busy);
   useEffect(()=>{if(paid&&messages===null)void loadMessages().catch(()=>{});},[paid,id]);
   const decide = (extra: Extra, decision: "APPROVED" | "REJECTED") => run(async () => {
     await api(`${path}materials/${extra.id}/decision/`, session.token, "POST", {decision});
     await refresh();
   });
   return <>
+    {(paid || refunded) && <Card>
+      <Text style={s.title}>Chat del servicio</Text>
+      {!paid ? <Text style={s.body}>{refunded?'Conversación cerrada después del reembolso.':'Se habilita después de confirmar el pago.'}</Text> : <>
+        <Text style={s.body}>Coordina la visita aquí. La conversación se actualiza automáticamente.</Text>
+        <Button secondary label="Actualizar mensajes" busy={busy} onPress={() => void run(loadMessages)} />
+        {!!chatError && <Notice tone="warning" title="Conversación sin actualizar" message={chatError}/>}
+        {messages?.length === 0 && <Text style={s.body}>Todavía no hay mensajes.</Text>}
+        <ScrollView ref={chatScroll} style={{backgroundColor:'#F2F3EF',borderRadius:20,maxHeight:360}} contentContainerStyle={{padding:12,gap:9,minHeight:150}} nestedScrollEnabled keyboardShouldPersistTaps="handled" onScroll={event=>{const {layoutMeasurement,contentOffset,contentSize}=event.nativeEvent;nearBottom.current=layoutMeasurement.height+contentOffset.y>=contentSize.height-60;}} scrollEventThrottle={100} onContentSizeChange={()=>{if(nearBottom.current)chatScroll.current?.scrollToEnd({animated:true});}}>
+          {messages?.map(m => {const mine=m.sender_id===session.user.id;return <View key={m.id} style={{alignSelf:mine?'flex-end':'flex-start',maxWidth:'86%',paddingHorizontal:14,paddingVertical:10,borderRadius:16,borderBottomRightRadius:mine?4:16,borderBottomLeftRadius:mine?16:4,backgroundColor:mine?'#FFE08A':'#FFFFFF',gap:3}}>
+            <Text style={{fontWeight:'700',fontSize:12,color:'#435052'}}>{mine?'Tú':client?'Prestador':'Cliente'}</Text>
+            <Text style={{fontSize:16,lineHeight:22,color:'#171717'}}>{m.text}</Text>
+            <Text style={{fontSize:11,color:'#646B6C',alignSelf:'flex-end'}}>{new Date(m.created_at).toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit'})}</Text>
+          </View>})}
+        </ScrollView>
+        <View style={{flexDirection:'row',alignItems:'flex-end',gap:8}}>
+          <TextInput accessibilityLabel="Escribe un mensaje" placeholder="Escribe un mensaje…" multiline maxLength={2000} value={message} onChangeText={setMessage} style={{flex:1,minHeight:48,maxHeight:130,backgroundColor:'#F4F5F5',borderRadius:24,paddingHorizontal:16,paddingVertical:12,fontSize:16,color:'#171717'}}/>
+          <Pressable accessibilityRole="button" accessibilityLabel="Enviar mensaje" disabled={busy||!message.trim()} style={{minWidth:72,paddingHorizontal:12,height:48,borderRadius:24,backgroundColor:'#171717',justifyContent:'center',alignItems:'center',opacity:busy||!message.trim()?0.4:1}} onPress={()=>void run(async()=>{const text=message.trim();nearBottom.current=true;setMessage('');try{await api(`${path}messages/`,session.token,'POST',{text});await loadMessages();}catch(error){setMessage(text);throw error;}})}><Text style={{fontSize:16,fontWeight:'700',color:'#FFFFFF'}}>Enviar</Text></Pressable>
+        </View>
+      </>}
+    </Card>}
     <Card>
       <Text style={s.title}>Materiales adicionales</Text>
       <Text style={s.body}>Solo se incluyen en el total los materiales aprobados por el cliente.</Text>
@@ -83,7 +105,7 @@ export function BillingPanel({id, session, status, data, busy, run, refresh}: {
     <Card>
       <Text style={s.title}>{paid ? 'Pago confirmado' : refunded ? 'Pago reembolsado' : 'Tu pago, sin sorpresas'}</Text>
       <View style={{backgroundColor:'#171717', borderRadius:20, padding:24, gap:8}}>
-        <Text style={{color:'#D6D6D6', fontSize:15}}>Total a pagar</Text>
+        <Text style={{color:'#D6D6D6', fontSize:15}}>{paid ? 'Total pagado' : refunded ? 'Total reembolsado' : 'Total a pagar'}</Text>
         <Text accessibilityRole="header" style={{color:'#FFFFFF', fontSize:38, fontWeight:'800'}}>{money(bill.total)}</Text>
         <Text style={{color:'#FFD578', fontSize:14, fontWeight:'700'}}>MODO DE PRUEBA · SIN COBRO REAL</Text>
       </View>
@@ -127,25 +149,6 @@ export function BillingPanel({id, session, status, data, busy, run, refresh}: {
         <Text style={s.label}>Total: {money(receipt.total)} · Sin validez tributaria</Text>
       </View>}
     </Card>
-    <Card>
-      <Text style={s.title}>Chat del servicio</Text>
-      {!paid ? <Text style={s.body}>{refunded?'Conversación cerrada después del reembolso.':'Se habilita después de confirmar el pago.'}</Text> : <>
-        <Text style={s.body}>Coordina la visita aquí. La conversación se actualiza automáticamente.</Text>
-        <Button secondary label="Actualizar mensajes" busy={busy} onPress={() => void run(loadMessages)} />
-        {!!chatError && <Notice tone="warning" title="Conversación sin actualizar" message={chatError}/>}
-        {messages?.length === 0 && <Text style={s.body}>Todavía no hay mensajes.</Text>}
-        <View style={{backgroundColor:'#F2F3EF',borderRadius:20,padding:12,gap:9,minHeight:150}}>
-          {messages?.map(m => {const mine=m.sender_id===session.user.id;return <View key={m.id} style={{alignSelf:mine?'flex-end':'flex-start',maxWidth:'86%',paddingHorizontal:14,paddingVertical:10,borderRadius:16,borderBottomRightRadius:mine?4:16,borderBottomLeftRadius:mine?16:4,backgroundColor:mine?'#FFE08A':'#FFFFFF',gap:3}}>
-            <Text style={{fontWeight:'700',fontSize:12,color:'#435052'}}>{mine?'Tú':client?'Prestador':'Cliente'}</Text>
-            <Text style={{fontSize:16,lineHeight:22,color:'#171717'}}>{m.text}</Text>
-            <Text style={{fontSize:11,color:'#646B6C',alignSelf:'flex-end'}}>{new Date(m.created_at).toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit'})}</Text>
-          </View>})}
-        </View>
-        <View style={{flexDirection:'row',alignItems:'flex-end',gap:8}}>
-          <TextInput accessibilityLabel="Escribe un mensaje" placeholder="Escribe un mensaje…" multiline maxLength={2000} value={message} onChangeText={setMessage} style={{flex:1,minHeight:48,maxHeight:130,backgroundColor:'#F4F5F5',borderRadius:24,paddingHorizontal:16,paddingVertical:12,fontSize:16,color:'#171717'}}/>
-          <Pressable accessibilityRole="button" accessibilityLabel="Enviar mensaje" disabled={busy||!message.trim()} style={{width:48,height:48,borderRadius:24,backgroundColor:'#171717',justifyContent:'center',alignItems:'center',opacity:busy||!message.trim()?0.4:1}} onPress={()=>void run(async()=>{const text=message.trim();setMessage('');try{await api(`${path}messages/`,session.token,'POST',{text});await loadMessages();}catch(error){setMessage(text);throw error;}})}><Text style={{fontSize:23,color:'#FFFFFF'}}>↑</Text></Pressable>
-        </View>
-      </>}
-    </Card>
+
   </>;
 }

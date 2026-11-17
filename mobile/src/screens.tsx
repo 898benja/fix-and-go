@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Image, Modal, Text, View } from "react-native";
+import { ActivityIndicator, Image, Modal, Platform, Text, View } from "react-native";
 import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
+import { File } from 'expo-file-system';
 import {
   api,
   options,
@@ -33,7 +35,7 @@ export function Access({
 }: {
   run: Run;
   busy: boolean;
-  onSession: (session: Session) => Promise<void>;
+  onSession: (session: Session, submittedProvider?: boolean) => Promise<void>;
 }) {
   const [register, setRegister] = useState(false);
   const [email, setEmail] = useState("");
@@ -42,6 +44,13 @@ export function Access({
   const [last, setLast] = useState("");
   const [display, setDisplay] = useState("");
   const [phone, setPhone] = useState("");
+  const [rut,setRut] = useState('');
+  const [profession,setProfession] = useState('');
+  const [professionalBackground,setProfessionalBackground] = useState('');
+  const [cv,setCv] = useState('');
+  const [cvName,setCvName] = useState('');
+  const [avatar,setAvatar] = useState('');
+  const [privacyAcknowledged,setPrivacyAcknowledged] = useState(false);
   const [address, setAddress] = useState("");
   const [areas, setAreas] = useState<Option[]>([]);
   const [commune, setCommune] = useState<number | null>(null);
@@ -100,7 +109,7 @@ export function Access({
               onChangeText={setLast}
               autoComplete="family-name"
             />
-            <Field label="Teléfono (opcional)" keyboardType="phone-pad" value={phone} onChangeText={setPhone} />
+            <Field label={role==='PROVIDER'?'Teléfono de contacto':'Teléfono (opcional)'} keyboardType="phone-pad" value={phone} onChangeText={setPhone} />
             <Field label="Dirección habitual (opcional)" value={address} onChangeText={setAddress} />
             <Text style={s.label}>Comuna habitual (opcional)</Text>
             <Chips items={areas} selected={commune ? [commune] : []} onSelect={v => setCommune(v === commune ? null : v)} />
@@ -108,7 +117,14 @@ export function Access({
             {role === "PROVIDER" && (
               <>
                 <Field label="Nombre de tu servicio" value={display} onChangeText={setDisplay}/>
-                <Text style={s.body}>Tras crear tu cuenta, completa RUT, oficio, experiencia, CV y foto en Tu perfil. Administración revisará la postulación antes de publicar tus servicios.</Text>
+                <Field label="RUT chileno" value={rut} onChangeText={setRut} autoCapitalize="characters" placeholder="12.345.678-5"/>
+                <Field label="Oficio o profesión" value={profession} onChangeText={setProfession} placeholder="Ejemplo: gasfitería"/>
+                <Field label="Formación y experiencia" multiline value={professionalBackground} onChangeText={setProfessionalBackground} placeholder="Cuéntanos tus estudios, certificaciones y experiencia"/>
+                <Button secondary label={avatar?'Cambiar foto de perfil':'Agregar foto de perfil'} busy={busy} onPress={()=>void run(async()=>{const result=await ImagePicker.launchImageLibraryAsync({mediaTypes:['images'],base64:true,quality:0.6,allowsEditing:true,aspect:[1,1]});if(result.canceled)return;const image=result.assets[0]?.base64;if(!image||image.length>2800000)throw new Error('Elige una foto de hasta 2 MB.');setAvatar(image);})}/>
+                {!!avatar&&<Image source={{uri:`data:image/jpeg;base64,${avatar}`}} style={{width:88,height:88,borderRadius:44}} accessibilityLabel="Tu foto de perfil"/>}
+                <Button secondary label={cvName||'Adjuntar CV en PDF · máximo 3 MB'} busy={busy} onPress={()=>void run(async()=>{const result=await DocumentPicker.getDocumentAsync({type:'application/pdf',copyToCacheDirectory:true});if(result.canceled)return;const asset=result.assets[0];if(asset.size&&asset.size>3*1024*1024)throw new Error('El CV debe pesar menos de 3 MB.');const content=Platform.OS==='web'?asset.base64:await new File(asset.uri).base64();if(!content||content.length>4200000)throw new Error('Elige un PDF de hasta 3 MB.');setCv(content);setCvName(asset.name);})}/>
+                <Text style={s.body}>El RUT y el CV solo los revisa administración. Tu foto, oficio y descripción serán visibles tras la aprobación. Usaremos tu correo para informarte el resultado.</Text>
+                <Button secondary label={privacyAcknowledged?'✓ Acepto el uso de mis datos para la revisión':'Acepto el uso de mis datos para revisar mi postulación'} onPress={()=>setPrivacyAcknowledged(!privacyAcknowledged)}/>
               </>
             )}
           </>
@@ -140,7 +156,7 @@ export function Access({
             (register &&
               (!first.trim() ||
                 !last.trim() ||
-                (role === "PROVIDER" && !display.trim())))
+                (role === "PROVIDER" && (!display.trim()||!phone.trim()||!rut.trim()||!profession.trim()||!professionalBackground.trim()||!cv||!avatar||!privacyAcknowledged))))
           }
           onPress={() =>
             void run(async () => {
@@ -156,13 +172,13 @@ export function Access({
                         first_name: first.trim(),
                         last_name: last.trim(),
                         role,
-                        ...(role === "PROVIDER" ? {display_name: display.trim()} : {}),
+                        ...(role === "PROVIDER" ? {display_name: display.trim(),rut:rut.trim(),profession:profession.trim(),professional_background:professionalBackground.trim(),cv_base64:cv,avatar_base64:avatar,privacy_acknowledged:privacyAcknowledged} : {}),
                         phone: phone.trim(), default_address: address.trim(), default_commune: commune,
                       }
                     : {}),
                 },
               );
-              await onSession(session);
+              await onSession(session,register&&role==='PROVIDER');
             })
           }
         />
@@ -197,6 +213,7 @@ export function NewRequest({
   const [preferredDate, setPreferredDate] = useState('');
   const [preferredTime, setPreferredTime] = useState('');
   const [requestPhotos, setRequestPhotos] = useState<string[]>([]);
+  const [reviewing, setReviewing] = useState(false);
   async function addPhoto() {
     const result = await ImagePicker.launchImageLibraryAsync({mediaTypes:['images'], base64:true, quality:0.6, allowsEditing:true});
     if (result.canceled) return;
@@ -206,10 +223,18 @@ export function NewRequest({
   }
   return (
     <>
-      <Text style={s.heading}>Cuéntanos qué necesitas</Text>
+      <Text style={s.heading}>{reviewing ? "Revisa tu solicitud" : "Cuéntanos qué necesitas"}</Text>
+      <Text style={s.body}>{reviewing ? "Paso 2 de 2 · Confirma los datos. Todavía no pagarás." : "Paso 1 de 2 · Describe el problema y elige cuándo te acomoda."}</Text>
       <Card>
         <Text style={s.title}>{provider.display_name}</Text>
         <Text style={s.body}>{provider.description}</Text>
+        {reviewing ? <>
+          <Text style={s.label}>{provider.categories.find(c => c.id === category)?.name} · {provider.communes.find(c => c.id === commune)?.name}</Text>
+          <Text style={s.body}>{description}</Text>
+          <Text style={s.body}>{address || "Dirección por acordar"}</Text>
+          <Text style={s.body}>{preferredDate || "Fecha por acordar"} {preferredTime} · {requestPhotos.length} fotos</Text>
+          <Button secondary label="Editar datos" onPress={() => setReviewing(false)} />
+        </> : <>
         <Text style={s.label}>Servicio</Text>
         <Chips
           items={provider.categories}
@@ -234,22 +259,25 @@ export function NewRequest({
           value={address}
           onChangeText={setAddress}
         />
-        <Field label="Fecha preferida (AAAA-MM-DD)" value={preferredDate} onChangeText={setPreferredDate} placeholder="2026-11-20" keyboardType="numbers-and-punctuation" />
+        <Text style={s.body}>La fecha es opcional. El prestador confirmará la disponibilidad en la cotización.</Text>
+        <Field label="Fecha preferida (AAAA-MM-DD)" value={preferredDate} onChangeText={setPreferredDate} placeholder="Ejemplo: 2026-12-05" keyboardType="numbers-and-punctuation" />
         <Text style={s.label}>Horario preferido</Text>
         <Chips items={[{id:1,name:'Mañana'},{id:2,name:'Tarde'},{id:3,name:'Noche'}]} selected={preferredTime ? [{'Mañana':1,'Tarde':2,'Noche':3}[preferredTime] ?? 0] : []} onSelect={id=>setPreferredTime(({1:'Mañana',2:'Tarde',3:'Noche'} as Record<number,string>)[id])}/>
         <Button secondary label={`Agregar foto del problema (${requestPhotos.length}/5)`} busy={busy} disabled={requestPhotos.length>=5} onPress={()=>void run(addPhoto)}/>
         {requestPhotos.map((photo,index)=><Image key={index} source={{uri:`data:image/jpeg;base64,${photo}`}} style={{width:80,height:80,borderRadius:10}} accessibilityLabel={`Foto ${index+1} del problema`}/>)}
         {requestPhotos.length>0&&<Button secondary label="Quitar última foto" onPress={()=>setRequestPhotos(current=>current.slice(0,-1))}/>}
+        </>}
         <Text style={s.body}>
           La dirección se comparte con el prestador asignado después del pago. No incluyas teléfonos ni correos en la descripción. Enviar esta
           solicitud no confirma un precio ni realiza un pago.
         </Text>
         <Button
-          label="Solicitar cotización"
+          label={reviewing ? "Enviar solicitud de cotización" : "Revisar solicitud"}
           busy={busy}
           disabled={!category || !commune || description.trim().length < 10 || (preferredDate !== '' && !/^\d{4}-\d{2}-\d{2}$/.test(preferredDate))}
           onPress={() =>
             void run(async () => {
+              if (!reviewing) { setReviewing(true); return; }
               // La API pide el ID del usuario, no el ID del perfil del prestador.
               const result = await api<RequestItem>(
                 "requests/",
@@ -265,10 +293,13 @@ export function NewRequest({
                   ...(preferredDate ? {preferred_date:preferredDate,preferred_time:preferredTime} : {}),
                 },
               );
-              for (const photo of requestPhotos) {
-                await api(`requests/${result.id}/photos/`,session.token,'POST',{image_base64:photo});
-              }
-              onCreated(result.id);
+              try {
+                for (const photo of requestPhotos) {
+                  await api(`requests/${result.id}/photos/`,session.token,'POST',{image_base64:photo});
+                }
+              } catch {
+                throw new Error("Tu solicitud fue creada, pero alguna foto no se pudo adjuntar. Puedes agregarla desde la solicitud; no necesitas enviarla de nuevo.");
+              } finally { onCreated(result.id); }
             })
           }
         />
@@ -451,6 +482,7 @@ export function Detail({
         <Text style={s.body}>{serviceProgress(item.status, billing?.bill.status, client).detail}</Text>
         {!!refreshError && <Notice tone="warning" title="Actualización pendiente" message={refreshError}/>}
       </Card>
+      {billing && (['ACCEPTED', 'IN_PROGRESS', 'COMPLETED'].includes(item.status) || billing.bill.status === 'DEMO_REFUNDED') && <BillingPanel id={id} session={session} status={item.status} data={billing} busy={busy} run={run} refresh={refresh} />}
       {pendingAction && (
         <Modal
           transparent
@@ -619,7 +651,6 @@ export function Detail({
         />
       )}
       {['IN_PROGRESS', 'COMPLETED'].includes(item.status) && <EvidencePanel key={id} id={id} session={session} status={item.status} run={run} busy={busy}/>}
-      {billing && <BillingPanel id={id} session={session} status={item.status} data={billing} busy={busy} run={run} refresh={refresh} />}
       {billing&&['DEMO_PAID','DEMO_REFUNDED'].includes(billing.bill.status)&&<DisputePanel id={id} session={session} run={run} busy={busy} refresh={refresh}/>}
       {rating && (
         <Card>
@@ -695,6 +726,12 @@ export function Profile({
   }, []);
   const toggle = (values: number[], id: number) =>
     values.includes(id) ? values.filter((v) => v !== id) : [...values, id];
+  if (profile?.verification_status === 'PENDING') return <>
+    <Text style={s.heading}>Postulación recibida</Text>
+    <ProviderVerification session={session} run={run} busy={busy}/>
+    <Button secondary label="Comprobar aprobación" busy={busy} onPress={()=>void load()}/>
+    <Button secondary label="Cerrar sesión" disabled={busy} onPress={logout}/>
+  </>;
   return (
     <>
       <Text style={s.heading}>Tu perfil</Text>

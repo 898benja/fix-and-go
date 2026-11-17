@@ -93,6 +93,8 @@ def amounts(sr):
                 commission_percent=30, commission_amount=commission, provider_amount=total-commission,
                 net_amount=net, vat_amount=total-net, vat_percent=rate,
                 snapshot={'quote_id': quote.pk, 'service_description': quote.description,
+                          'proposed_date': quote.proposed_date.isoformat() if quote.proposed_date else None,
+                          'estimated_duration': quote.estimated_duration, 'notes': quote.notes,
                           'materials': [{'id': x.pk, 'description': x.description, 'quantity': x.quantity,
                                          'unit_price': x.unit_price, 'total': x.quantity*x.unit_price} for x in approved],
                           'notice': 'DEMOSTRACIÓN SIN COBRO REAL NI VALIDEZ TRIBUTARIA'}), any(x.status == 'PENDING' for x in items)
@@ -138,4 +140,7 @@ def demo_result(pk, user, outcome):
     order.status = 'DEMO_PAID' if outcome == 'approved' else 'FAILED'
     order.paid_at = timezone.now() if outcome == 'approved' else None
     order.save(update_fields=['status', 'paid_at', 'snapshot'])
+    if outcome == 'approved':
+        from core.notifications import payment_receipt
+        transaction.on_commit(lambda order_id=order.pk: payment_receipt(PaymentOrder.objects.get(pk=order_id)))
     return order

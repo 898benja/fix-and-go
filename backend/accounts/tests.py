@@ -14,6 +14,16 @@ class IdentityTests(APITestCase):
         return dict(email='cliente@example.test', password='Mvp!demo-X94-tree',
                     first_name='Demo', last_name='Prueba', role='CLIENT')
 
+    def provider_payload(self):
+        import base64, io
+        from PIL import Image
+        image = io.BytesIO(); Image.new('RGB',(24,24),'blue').save(image,format='PNG')
+        pdf = b'%PDF-1.4\n' + b'A'*120 + b'\n%%EOF'
+        return {**self.payload(), 'role':'PROVIDER','display_name':'Prestador demo','phone':'+56912345678',
+                'rut':'12.345.678-5','profession':'Gasfitería','professional_background':'Experiencia en instalaciones',
+                'cv_base64':base64.b64encode(pdf).decode(),'avatar_base64':base64.b64encode(image.getvalue()).decode(),
+                'privacy_acknowledged':True}
+
     def register(self, data=None):
         return self.client.post(reverse('register'), data or self.payload(), format='json')
 
@@ -27,10 +37,17 @@ class IdentityTests(APITestCase):
         self.assertFalse(ProviderProfile.objects.exists())
 
     def test_provider_registration_creates_profile(self):
-        data = self.payload()
-        data.update(role='PROVIDER', display_name='Prestador demo')
+        data = self.provider_payload()
         self.assertEqual(self.register(data).status_code, 201)
         self.assertEqual(ProviderProfile.objects.get().display_name, 'Prestador demo')
+        self.assertEqual(ProviderProfile.objects.get().verification_status, 'PENDING')
+        self.assertFalse(ProviderProfile.objects.get().is_active)
+
+    def test_incomplete_provider_application_creates_no_account(self):
+        data = self.payload()
+        data.update(role='PROVIDER', display_name='Postulación incompleta')
+        self.assertEqual(self.register(data).status_code, 400)
+        self.assertFalse(User.objects.exists())
 
     def test_registration_rolls_back_when_token_creation_fails(self):
         with patch('accounts.serializers.Token.objects.create', side_effect=RuntimeError('test')):
@@ -114,8 +131,8 @@ class IdentityTests(APITestCase):
         }).status_code, 403)
 
     def test_provider_can_update_own_profile(self):
-        data = self.payload()
-        data.update(role='PROVIDER', display_name='Prestador inicial')
+        data = self.provider_payload()
+        data['display_name']='Prestador inicial'
         self.assertEqual(self.register(data).status_code, 201)
         provider = User.objects.get()
         category = Category.objects.first()

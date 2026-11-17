@@ -12,6 +12,7 @@ from django.utils import timezone
 from django.utils.html import format_html
 
 from .models import ProviderProfile, User
+from core.notifications import provider_review
 
 
 @admin.register(User)
@@ -89,12 +90,18 @@ class ProviderProfileAdmin(admin.ModelAdmin):
                 profile.is_active = True
                 profile.reviewed_at = timezone.now()
                 profile.save(update_fields=['verification_status','is_verified','is_active','reviewed_at'])
+                provider_review(profile, approved=True)
                 count += 1
         self.message_user(request, f'{count} postulaciones aprobadas tras revisión administrativa.')
 
     @admin.action(description='Rechazar postulaciones seleccionadas')
     def reject_profiles(self, request, queryset):
-        count = queryset.filter(verification_status='PENDING').update(verification_status='REJECTED', is_verified=False, is_active=False, reviewed_at=timezone.now())
+        count = 0
+        for profile in queryset.filter(verification_status='PENDING'):
+            profile.verification_status='REJECTED';profile.is_verified=False;profile.is_active=False;profile.reviewed_at=timezone.now()
+            profile.save(update_fields=['verification_status','is_verified','is_active','reviewed_at'])
+            provider_review(profile, approved=False)
+            count += 1
         self.message_user(request, f'{count} postulaciones rechazadas. Agrega una observación interna para orientar la nueva presentación.')
 
     @admin.display(description='Categorías')

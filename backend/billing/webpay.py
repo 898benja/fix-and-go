@@ -144,6 +144,8 @@ def returned(request):
                 if approved and order.service_request.status == 'ACCEPTED' and order.status != 'DEMO_REFUNDED':
                     order.status = 'DEMO_PAID'; order.paid_at = timezone.now()
                     order.save(update_fields=['status', 'paid_at'])
+                    from core.notifications import payment_receipt
+                    transaction.on_commit(lambda order_id=order.pk: payment_receipt(PaymentOrder.objects.get(pk=order_id)))
                 elif order.status not in ['DEMO_PAID', 'DEMO_REFUNDED']:
                     order.status = 'FAILED'; order.save(update_fields=['status'])
                 attempt.finished = True; attempt.save(update_fields=['finished'])

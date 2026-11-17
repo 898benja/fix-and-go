@@ -13,6 +13,7 @@ from rest_framework.authtoken.models import Token
 from .models import ProviderProfile, User
 from .profile import PersonalProfileSerializer
 from catalog.models import Commune
+from .verification import VerificationInput, save_verification
 
 
 # ---------------------------------------------------------------------------
@@ -43,6 +44,12 @@ class RegisterSerializer(serializers.Serializer):
 
     # Solo para prestadores
     display_name = serializers.CharField(max_length=120, required=False)
+    rut = serializers.CharField(max_length=20, required=False)
+    profession = serializers.CharField(max_length=120, required=False)
+    professional_background = serializers.CharField(max_length=2000, required=False)
+    cv_base64 = serializers.CharField(max_length=4200000, required=False, write_only=True, trim_whitespace=False)
+    avatar_base64 = serializers.CharField(max_length=2800000, required=False, write_only=True, trim_whitespace=False)
+    privacy_acknowledged = serializers.BooleanField(required=False, write_only=True)
 
     def validate_email(self, value):
         """BD-02: email único sin distinguir mayúsculas."""
@@ -63,16 +70,26 @@ class RegisterSerializer(serializers.Serializer):
 
     def validate(self, attrs):
         """Validación cruzada: display_name requerido para prestadores."""
-        if attrs['role'] == User.Role.PROVIDER and not attrs.get('display_name'):
-            raise serializers.ValidationError(
-                {'display_name': 'El nombre visible es obligatorio para prestadores.'}
-            )
+        if attrs['role'] == User.Role.PROVIDER:
+            required = ('display_name','phone','rut','profession','professional_background','cv_base64','avatar_base64')
+            missing = {key:'Completa este dato para enviar tu postulación.' for key in required if not attrs.get(key)}
+            if missing:
+                raise serializers.ValidationError(missing)
+            verifier = VerificationInput(data={key:attrs.get(key) for key in ('rut','profession','professional_background','cv_base64','privacy_acknowledged')})
+            verifier.is_valid(raise_exception=True)
+            attrs['rut'] = verifier.validated_data['rut']
+            attrs['cv_base64'] = verifier.validated_data['cv_base64']
+            from services.evidence import normalize
+            attrs['avatar_base64'] = normalize(attrs['avatar_base64'])
+            if ProviderProfile.objects.filter(rut=attrs['rut']).exists():
+                raise serializers.ValidationError({'rut':'Este RUT ya está asociado a una postulación.'})
         return attrs
 
     @transaction.atomic
     def create(self, validated_data):
         """Crear usuario, perfil de prestador (si aplica) y token."""
         display_name = validated_data.pop('display_name', '')
+        verification = {key:validated_data.pop(key,None) for key in ('rut','profession','professional_background','cv_base64','avatar_base64','privacy_acknowledged')}
         role = validated_data.pop('role')
         password = validated_data.pop('password')
         email = validated_data['email']
@@ -91,12 +108,19 @@ class RegisterSerializer(serializers.Serializer):
         )
         user.set_password(password)
         user.save()
+        token = Token.objects.create(user=user)
 
         # Crear perfil de prestador automáticamente (BD-02)
         if role == User.Role.PROVIDER:
-            ProviderProfile.objects.create(user=user, display_name=display_name, is_active=False)
+            import base64
+            import io
+            from PIL import Image, ImageOps
+            profile = ProviderProfile.objects.create(user=user, display_name=display_name, is_active=False)
+            image = ImageOps.fit(Image.open(io.BytesIO(verification['avatar_base64'])), (240,240))
+            output = io.BytesIO(); image.save(output, format='JPEG', quality=80)
+            profile.avatar = 'data:image/jpeg;base64,' + base64.b64encode(output.getvalue()).decode()
+            save_verification(profile, verification)
 
-        token = Token.objects.create(user=user)
         return user, token
 
 
