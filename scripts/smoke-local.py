@@ -1,5 +1,5 @@
 """Recorrido HTTP real de dos roles; usa exclusivamente las cuentas ficticias locales."""
-import base64,io,json,re,urllib.request,urllib.error
+import base64,io,json,re,os,urllib.request,urllib.error
 from pathlib import Path
 from PIL import Image
 root=Path(__file__).resolve().parents[1]
@@ -8,7 +8,7 @@ passed=[]
 def call(path,method='GET',data=None,token=None,expected=200):
  headers={'Content-Type':'application/json'}
  if token:headers['Authorization']='Token '+token
- req=urllib.request.Request('http://127.0.0.1:8000/api/v1/'+path,data=json.dumps(data).encode() if data is not None else None,headers=headers,method=method)
+ req=urllib.request.Request(os.environ.get('FIXGO_SMOKE_API_URL','http://127.0.0.1:8000/api/v1/')+path,data=json.dumps(data).encode() if data is not None else None,headers=headers,method=method)
  try:
   with urllib.request.urlopen(req,timeout=15) as r:status=r.status;body=r.read()
  except urllib.error.HTTPError as e:status=e.code;body=e.read()

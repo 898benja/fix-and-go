@@ -1,0 +1,11 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import ts from 'typescript';
+const js=ts.transpileModule(readFileSync(new URL('../src/pdf-content.ts',import.meta.url),'utf8'),{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText;
+const {normalizePdfContent}=await import(`data:text/javascript;base64,${Buffer.from(js).toString('base64')}`);
+const pdf=Buffer.from('%PDF-1.4\n'+'A'.repeat(120)+'\n%%EOF').toString('base64');
+test('acepta PDF nativo y elimina prefijo del navegador',()=>{assert.equal(normalizePdfContent(pdf),pdf);assert.equal(normalizePdfContent('data:application/pdf;base64,'+pdf),pdf);});
+test('rechaza carga ausente y archivo que no es PDF',()=>{assert.throws(()=>normalizePdfContent(undefined),/leer/);assert.throws(()=>normalizePdfContent(Buffer.from('otro archivo').toString('base64')),/válido/);});
+test('acepta el límite de 3 MB y rechaza un byte más',()=>{for(const [size,ok] of [[3*1024*1024,true],[3*1024*1024+1,false]]){const data=Buffer.alloc(size,65);data.write('%PDF-1.4');const raw=data.toString('base64');if(ok)assert.equal(normalizePdfContent(raw),raw);else assert.throws(()=>normalizePdfContent(raw),/3 MB/);}});
+test('rechaza PDF incompleto',()=>assert.throws(()=>normalizePdfContent(Buffer.from('%PDF-1.4').toString('base64')),/incompleto/));
