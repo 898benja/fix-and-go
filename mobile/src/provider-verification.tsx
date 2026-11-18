@@ -1,3 +1,4 @@
+import { pdfBase64 } from './pdf-base64';
 import { useEffect, useState } from 'react';
 import { Platform, Text, View } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
@@ -19,11 +20,11 @@ export function ProviderVerification({session,run,busy}:{session:Session;run:Run
   const load=async()=>setReview(await api<Review>('auth/me/provider-profile/verification/',session.token));
   useEffect(()=>{void load().catch(()=>{});},[session.token]);
   async function pickCv(){
-    const result=await DocumentPicker.getDocumentAsync({type:'application/pdf',copyToCacheDirectory:true});
+    const result=await DocumentPicker.getDocumentAsync({type:'application/pdf',copyToCacheDirectory:true,base64:true});
     if(result.canceled)return;
     const asset=result.assets[0];
     if(asset.size&&asset.size>3*1024*1024)throw new Error('El CV debe pesar menos de 3 MB.');
-    const content=Platform.OS==='web' ? asset.base64 : await new File(asset.uri).base64();
+    const content=pdfBase64(Platform.OS==='web' ? asset.base64 : await new File(asset.uri).base64());
     if(!content||content.length>4200000)throw new Error('No pudimos leer el PDF. Elige uno de hasta 3 MB.');
     setCv(content);setCvName(asset.name);
   }
