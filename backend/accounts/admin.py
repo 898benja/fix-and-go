@@ -54,7 +54,7 @@ class ProviderProfileAdmin(admin.ModelAdmin):
 
     list_display = [
         'display_name', 'user', 'verification_status', 'is_active', 'is_verified',
-        'years_experience', 'phone', 'get_categories', 'get_communes',
+        'years_experience', 'phone', 'get_categories', 'get_communes', 'publication_status',
     ]
     list_filter = ['verification_status', 'is_active', 'is_verified', 'categories', 'communes']
     search_fields = ['display_name', 'user__email', 'user__first_name', 'user__last_name']
@@ -64,6 +64,18 @@ class ProviderProfileAdmin(admin.ModelAdmin):
     readonly_fields = ['rut', 'profession', 'professional_background', 'cv_download', 'reviewed_at', 'verification_status', 'is_verified']
     exclude = ['cv']
     actions = ['approve_profiles', 'reject_profiles']
+
+    @admin.display(description='Visibilidad en la app')
+    def publication_status(self, obj):
+        if obj.verification_status != 'APPROVED':
+            return 'Pendiente de aprobación administrativa'
+        if not obj.is_active or not obj.user.is_active:
+            return 'Cuenta o perfil desactivado'
+        if not obj.map_visible or obj.latitude is None or obj.longitude is None:
+            return 'Catálogo disponible; falta publicar ubicación en el mapa'
+        if not obj.categories.exists() or not obj.communes.exists():
+            return 'Completar servicios y comunas de atención'
+        return 'Publicado en catálogo y mapa'
 
     def get_urls(self):
         return [path('<int:profile_id>/cv/', self.admin_site.admin_view(self.download_cv), name='provider-cv-download')] + super().get_urls()
